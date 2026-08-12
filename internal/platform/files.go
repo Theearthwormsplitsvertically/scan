@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 )
@@ -25,9 +26,15 @@ func (root Root) Path(absoluteLinuxPath string) (string, error) {
 	if !strings.HasPrefix(absoluteLinuxPath, "/") {
 		return "", fmt.Errorf("path must be absolute: %q", absoluteLinuxPath)
 	}
-	relative := filepath.FromSlash(strings.TrimPrefix(filepath.ToSlash(filepath.Clean(absoluteLinuxPath)), "/"))
+	cleaned := pathpkg.Clean(absoluteLinuxPath)
+	relative := filepath.FromSlash(strings.TrimPrefix(cleaned, "/"))
 	resolved := filepath.Join(root.base, relative)
-	if resolved != root.base && !strings.HasPrefix(resolved, root.base+string(filepath.Separator)) {
+	boundary := root.base
+	volumeRoot := filepath.VolumeName(root.base) + string(filepath.Separator)
+	if root.base != volumeRoot {
+		boundary += string(filepath.Separator)
+	}
+	if resolved != root.base && !strings.HasPrefix(resolved, boundary) {
 		return "", fmt.Errorf("path escapes root: %q", absoluteLinuxPath)
 	}
 	return resolved, nil
