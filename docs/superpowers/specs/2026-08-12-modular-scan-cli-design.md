@@ -12,6 +12,8 @@
 
 本设计只定义本地 Linux 资产采集行为，不涉及 CMDB、中心端上报、增量调度和历史数据管理。
 
+本设计从 `v0.2.0` 起成为唯一行为基线，不保留 v0.1.0 中“未指定输出参数时向标准输出写 JSON”的默认行为。后续功能继续遵循“具体功能、具体扫描模块”的原则：每个独立资产域拥有自己的命令、数据协议、依赖、状态和测试；`all` 只负责编排模块，不承载新的专用采集逻辑。
+
 ## 2. 命令契约
 
 ### 2.1 基本命令
@@ -24,7 +26,7 @@ asset-agent scan process
 asset-agent scan socket
 ```
 
-为兼容已经发布的 v0.1.0，以下命令等同于 `scan all`：
+以下命令是 `scan all` 的简写，二者都使用本设计规定的默认文件输出行为：
 
 ```bash
 asset-agent scan
@@ -117,10 +119,11 @@ asset-agent scan --help
 
 ### 4.1 完整扫描
 
-`scan all` 保持现有 `Snapshot` JSON 结构，避免破坏 v0.1.0 的消费者：
+`scan all` 使用完整 Snapshot 结构：
 
 ```json
 {
+  "schema_name": "asset-agent.snapshot",
   "schema_version": "1.0",
   "scan": {},
   "agent": {},
@@ -145,6 +148,7 @@ asset-agent scan --help
 
 ```json
 {
+  "schema_name": "asset-agent.module-report",
   "schema_version": "1.0",
   "module": "host",
   "scan": {
@@ -163,6 +167,7 @@ asset-agent scan --help
 
 约束：
 
+- `schema_name` 唯一标识报告类型；完整扫描和单模块扫描拥有相互独立的协议版本；
 - `module` 必须是命令中选择的模块；
 - `data` 只暴露该模块约定的业务字段；
 - 为建立证据链而执行的内部依赖不把完整结果泄漏到 `data`；
@@ -338,7 +343,7 @@ asset-agent scan socket
 asset-agent scan all
 ```
 
-职责：执行当前所有已实现采集器，生成兼容现有协议的完整 Snapshot。
+职责：通过模块注册表执行当前所有已启用采集模块，生成完整 Snapshot。
 
 当前执行顺序：
 
@@ -435,6 +440,10 @@ flowchart TD
 
 执行原则：
 
+- 一个具有独立资产语义、数据源或性能成本的功能必须设计为独立扫描模块；
+- 新功能不得直接堆叠到 `host`、`network`、`process` 或 `socket` 等无关模块中；
+- 每个新模块必须定义模块名、命令、输出数据、直接数据源、内部依赖、降级行为和验收测试；
+- `all` 通过模块注册表选择已启用模块并编排执行，本身不读取系统资产数据；
 - 用户选择的是输出模块，不需要了解内部依赖；
 - 编排器自动计算依赖闭包并按拓扑顺序执行；
 - 同一次命令中的依赖只执行一次；
@@ -514,7 +523,8 @@ CLI 只负责解析命令和决定输出位置，不了解采集器依赖；Agen
 - 默认输出写入可执行文件目录下的 `output`；
 - 成功后标准输出包含最终文件绝对路径；
 - 未知模块、未知选项、缺少值和重复输出参数返回退出码 `2`；
-- `version`、`doctor` 和旧版 `scan --output` 不回归。
+- `version` 和 `doctor` 行为不回归；
+- `scan --output <path>` 继续可用，但无参数 `scan` 的默认输出按 v0.2.0 设计改为安装目录下的文件。
 
 ### 11.2 编排单元测试
 
@@ -569,3 +579,13 @@ sudo ./asset-agent scan network -o - | jq .
 - 报告保留周期和历史轮转。
 
 后续采集模块按 `service → package → container → application → file → security` 的顺序独立设计和实现。
+
+## 13. 版本基线
+
+- 产品版本：`v0.2.0`；
+- `asset-agent scan` 与 `asset-agent scan all` 默认写入安装目录下的 `output`；
+- 需要标准输出时必须显式使用 `-o -`；
+- 完整报告使用 `schema_name: "asset-agent.snapshot"`；
+- 单模块报告使用 `schema_name: "asset-agent.module-report"`；
+- v0.1.0 只作为历史 PoC，不再约束后续 CLI 默认行为；
+- 后续所有新采集能力均先形成独立模块设计，再进入实现和 `all` 编排。
