@@ -9,18 +9,25 @@ if [ ! -x "$agent_binary" ]; then
 fi
 
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/asset-agent-verify.XXXXXX")
-cleanup() {
-  rm -rf "$work_dir"
-}
-trap cleanup EXIT HUP INT TERM
+chmod 0700 "$work_dir"
+installed_agent="$work_dir/asset-agent"
+cp "$agent_binary" "$installed_agent"
+chmod 0755 "$installed_agent"
 
-"$agent_binary" version
-"$agent_binary" doctor > "$work_dir/doctor.json"
-"$agent_binary" scan --output "$work_dir/snapshot.json"
+"$installed_agent" version > "$work_dir/version.json"
+"$installed_agent" doctor > "$work_dir/doctor.json"
+"$installed_agent" scan host
+"$installed_agent" scan network
+"$installed_agent" scan process
+"$installed_agent" scan socket
+"$installed_agent" scan all
+
+output_dir="$work_dir/output"
+snapshot_file=$(find "$output_dir" -maxdepth 1 -type f -name 'all-*.json' | sort | tail -n 1)
 
 printf '%s\n' 'Agent listening sockets:'
 if command -v jq >/dev/null 2>&1; then
-  jq -r '.sockets[] | select(.state == "LISTEN") | "\(.protocol) \(.local_address):\(.local_port) inode=\(.inode) pids=\(.pids | join(","))"' "$work_dir/snapshot.json"
+  jq -r '.sockets[] | select(.state == "LISTEN") | "\(.protocol) \(.local_address):\(.local_port) inode=\(.inode) pids=\(.pids | join(","))"' "$snapshot_file"
 else
   printf '%s\n' 'jq is not installed; inspect the JSON report manually.'
 fi
@@ -36,5 +43,4 @@ else
   printf '%s\n' 'ss is not installed; native socket comparison skipped.'
 fi
 
-printf '%s\n' 'Verification completed. Temporary reports were removed.'
-
+printf '%s\n' "Verification completed. Reports retained at: $work_dir"
