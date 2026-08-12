@@ -16,8 +16,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
-// Dependencies is the injectable collector set used by LocalRuntime.
-// Tests replace individual functions to verify orchestration and failure isolation.
+// Dependencies 是 LocalRuntime 使用的可注入采集器集合。
+// 测试替换其中单个函数，以验证编排和故障隔离。
 type Dependencies struct {
 	Doctor    func(context.Context) model.DoctorReport
 	Host      func(context.Context) (model.Host, model.CollectorStatus)
@@ -26,7 +26,7 @@ type Dependencies struct {
 	Sockets   func(context.Context, []model.Process) ([]model.Socket, []model.Relationship, model.CollectorStatus)
 }
 
-// defaultDependencies wires the production collectors to one Linux filesystem root.
+// defaultDependencies 将生产采集器连接到一个 Linux 文件系统根。
 func defaultDependencies(root platform.Root) Dependencies {
 	return Dependencies{
 		Doctor: func(ctx context.Context) model.DoctorReport {
@@ -47,8 +47,8 @@ func defaultDependencies(root platform.Root) Dependencies {
 	}
 }
 
-// Scan runs one full baseline collection and returns all successful domains plus per-domain status.
-// Context cancellation before work is fatal; individual collector failures remain local to that domain.
+// Scan 执行一次完整基线采集，并返回所有成功域和每个域的状态。
+// 开始工作前的 context 取消是顶层失败；单个采集器失败只保留在自身采集域。
 func (local *LocalRuntime) Scan(ctx context.Context) (model.Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return model.Snapshot{}, err
@@ -86,7 +86,7 @@ func (local *LocalRuntime) Scan(ctx context.Context) (model.Snapshot, error) {
 	return snapshot, nil
 }
 
-// newSnapshot creates a complete schema-shaped document with all collections initialized.
+// newSnapshot 创建符合完整 schema 的文档，并初始化全部集合字段。
 func newSnapshot(started time.Time) model.Snapshot {
 	return model.Snapshot{
 		SchemaVersion:     model.SchemaVersion,
@@ -99,7 +99,7 @@ func newSnapshot(started time.Time) model.Snapshot {
 	}
 }
 
-// invokeDoctor runs capability detection with a host/network timeout and panic isolation.
+// invokeDoctor 在主机/网络超时范围内运行能力检测并隔离 panic。
 func invokeDoctor(ctx context.Context, collector func(context.Context) model.DoctorReport) (report model.DoctorReport, status model.CollectorStatus) {
 	started := time.Now().UTC()
 	status = model.CollectorStatus{Collector: "capability", Status: model.StatusOK, StartedAt: started, Errors: []string{}}
@@ -122,7 +122,7 @@ func invokeDoctor(ctx context.Context, collector func(context.Context) model.Doc
 	return report, status
 }
 
-// invokeHost runs host collection with a 15-second limit and converts panic to failed status.
+// invokeHost 以 15 秒限制运行主机采集，并将 panic 转为 failed 状态。
 func invokeHost(ctx context.Context, collector func(context.Context) (model.Host, model.CollectorStatus)) (result model.Host, status model.CollectorStatus) {
 	started := time.Now().UTC()
 	defer func() {
@@ -140,7 +140,7 @@ func invokeHost(ctx context.Context, collector func(context.Context) (model.Host
 	return collector(bounded)
 }
 
-// invokeNetwork runs network collection with a 15-second limit and preserves other domains on failure.
+// invokeNetwork 以 15 秒限制运行网络采集，失败时保留其他采集域。
 func invokeNetwork(ctx context.Context, collector func(context.Context) ([]model.NetworkInterface, []model.Address, []model.Route, model.CollectorStatus)) (interfaces []model.NetworkInterface, addresses []model.Address, routes []model.Route, status model.CollectorStatus) {
 	started := time.Now().UTC()
 	defer func() {
@@ -158,7 +158,7 @@ func invokeNetwork(ctx context.Context, collector func(context.Context) ([]model
 	return collector(bounded)
 }
 
-// invokeProcesses runs process collection with a 30-second limit and the host boot ID.
+// invokeProcesses 使用主机 boot ID 以 30 秒限制运行进程采集。
 func invokeProcesses(ctx context.Context, collector func(context.Context, string) ([]model.Process, model.CollectorStatus), bootID string) (processes []model.Process, status model.CollectorStatus) {
 	started := time.Now().UTC()
 	defer func() {
@@ -176,7 +176,7 @@ func invokeProcesses(ctx context.Context, collector func(context.Context, string
 	return collector(bounded, bootID)
 }
 
-// invokeSockets runs socket collection with a 30-second limit after processes are available.
+// invokeSockets 在进程结果可用后，以 30 秒限制运行 socket 采集。
 func invokeSockets(ctx context.Context, collector func(context.Context, []model.Process) ([]model.Socket, []model.Relationship, model.CollectorStatus), processes []model.Process) (sockets []model.Socket, relationships []model.Relationship, status model.CollectorStatus) {
 	started := time.Now().UTC()
 	defer func() {
@@ -194,12 +194,12 @@ func invokeSockets(ctx context.Context, collector func(context.Context, []model.
 	return collector(bounded, processes)
 }
 
-// failedStatus creates a complete failed status record for a missing collector or recovered panic.
+// failedStatus 为缺失采集器或已恢复的 panic 创建完整 failed 状态记录。
 func failedStatus(collector string, started time.Time, message string) model.CollectorStatus {
 	return finishCollectorStatus(model.CollectorStatus{Collector: collector, Status: model.StatusFailed, StartedAt: started, Errors: []string{message}}, started, 0)
 }
 
-// normalizeStatus fills required metadata when a collector returns an incomplete status record.
+// normalizeStatus 在采集器返回不完整状态时补齐必填元数据。
 func normalizeStatus(status model.CollectorStatus, collector string, started time.Time, objects int) model.CollectorStatus {
 	if status.Collector == "" {
 		status.Collector = collector
@@ -217,7 +217,7 @@ func normalizeStatus(status model.CollectorStatus, collector string, started tim
 	return finishCollectorStatus(status, started, objects)
 }
 
-// finishCollectorStatus stamps timing and object count while retaining the collector's outcome.
+// finishCollectorStatus 填充时间和对象数，同时保留采集器已有结果。
 func finishCollectorStatus(status model.CollectorStatus, started time.Time, objects int) model.CollectorStatus {
 	if status.FinishedAt.IsZero() {
 		status.FinishedAt = time.Now().UTC()
@@ -230,13 +230,13 @@ func finishCollectorStatus(status model.CollectorStatus, started time.Time, obje
 	return status
 }
 
-// nonNilCapabilities guarantees a JSON array for capability items.
+// nonNilCapabilities 保证能力项在 JSON 中为数组。
 func nonNilCapabilities(report model.CapabilityReport) model.CapabilityReport {
 	report.Items = nonNil(report.Items)
 	return report
 }
 
-// nonNil normalizes a nil slice to an empty slice for the in-memory snapshot.
+// nonNil 将 nil 切片规范化为空切片，用于内存中的 snapshot。
 func nonNil[T any](items []T) []T {
 	if items == nil {
 		return []T{}

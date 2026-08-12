@@ -1,4 +1,4 @@
-// Package platform provides bounded, read-only access to a Linux-shaped filesystem root.
+// platform 包提供对 Linux 目录结构根的有界只读访问。
 package platform
 
 import (
@@ -11,12 +11,12 @@ import (
 	"strings"
 )
 
-// Root maps Linux absolute paths into one trusted filesystem root.
+// Root 将 Linux 绝对路径映射到一个受信任的文件系统根。
 type Root struct {
 	base string
 }
 
-// NewRoot creates a cleaned absolute root for production or fixture reads.
+// NewRoot 创建经过清理的绝对根目录，用于生产读取或 fixture 读取。
 func NewRoot(base string) Root {
 	absolute, err := filepath.Abs(base)
 	if err != nil {
@@ -25,7 +25,7 @@ func NewRoot(base string) Root {
 	return Root{base: filepath.Clean(absolute)}
 }
 
-// Path maps an absolute Linux path into Root and rejects paths that escape it.
+// Path 将 Linux 绝对路径映射到 Root 内，并拒绝越出该根目录的路径。
 func (root Root) Path(absoluteLinuxPath string) (string, error) {
 	if !strings.HasPrefix(absoluteLinuxPath, "/") {
 		return "", fmt.Errorf("path must be absolute: %q", absoluteLinuxPath)
@@ -44,7 +44,7 @@ func (root Root) Path(absoluteLinuxPath string) (string, error) {
 	return resolved, nil
 }
 
-// ReadFile reads at most maximum bytes from a permitted path.
+// ReadFile 从允许路径最多读取 maximum 字节。
 func (root Root) ReadFile(path string, maximum int64) ([]byte, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -65,7 +65,7 @@ func (root Root) ReadFile(path string, maximum int64) ([]byte, error) {
 	return data, nil
 }
 
-// ReadDir returns direct directory entries from a permitted path.
+// ReadDir 返回允许路径下的直接目录项。
 func (root Root) ReadDir(path string) ([]fs.DirEntry, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -74,7 +74,7 @@ func (root Root) ReadDir(path string) ([]fs.DirEntry, error) {
 	return os.ReadDir(resolved)
 }
 
-// Readlink resolves a permitted symbolic link without following it.
+// Readlink 读取允许路径的符号链接目标而不继续跟随链接。
 func (root Root) Readlink(path string) (string, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -83,7 +83,7 @@ func (root Root) Readlink(path string) (string, error) {
 	return os.Readlink(resolved)
 }
 
-// Stat returns metadata for a permitted path.
+// Stat 返回允许路径的元数据。
 func (root Root) Stat(path string) (fs.FileInfo, error) {
 	resolved, err := root.Path(path)
 	if err != nil {

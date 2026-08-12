@@ -1,4 +1,4 @@
-// Package security contains output-safety helpers for collected host facts.
+// security 包提供采集结果输出前的安全处理辅助函数。
 package security
 
 import (
@@ -10,8 +10,8 @@ const redacted = "[REDACTED]"
 
 var sensitiveKeys = []string{"password", "passwd", "token", "secret", "authorization", "cookie", "api_key", "apikey", "private_key"}
 
-// RedactArgs returns a copy of args with credential-like values removed.
-// It preserves argument count so consumers can retain command-line structure.
+// RedactArgs 返回已移除凭据类值的 args 副本。
+// 它保留参数数量，使消费者仍能理解原始命令行结构。
 func RedactArgs(args []string) []string {
 	result := append([]string(nil), args...)
 	redactNext := false
@@ -42,7 +42,7 @@ func RedactArgs(args []string) []string {
 	return result
 }
 
-// isSensitiveKey recognizes supported credential key names after option prefixes are removed.
+// isSensitiveKey 在去掉选项前缀后识别支持的敏感凭据键名。
 func isSensitiveKey(key string) bool {
 	key = strings.ToLower(strings.TrimSpace(key))
 	for _, sensitive := range sensitiveKeys {

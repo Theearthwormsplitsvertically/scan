@@ -12,8 +12,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
-// ParseProcNet normalizes one /proc/net/tcp*, udp*, or IPv6 table into Socket records.
-// Invalid rows are returned separately so one damaged procfs row does not discard valid sockets.
+// ParseProcNet 将一个 /proc/net/tcp*、udp* 或 IPv6 表规范化为 Socket 记录。
+// 无效行单独返回，避免一条损坏的 procfs 行丢弃其他有效 socket。
 func ParseProcNet(reader io.Reader, protocol string, family int, netns string) ([]model.Socket, []error) {
 	result := make([]model.Socket, 0)
 	errorsFound := make([]error, 0)
@@ -57,8 +57,8 @@ func ParseProcNet(reader io.Reader, protocol string, family int, netns string) (
 	return result, errorsFound
 }
 
-// parseEndpoint decodes one hexadecimal procfs endpoint into an IP address and port.
-// Linux stores IPv4 values little-endian and IPv6 values in reversed 32-bit words.
+// parseEndpoint 将一个十六进制 procfs 端点解码为 IP 地址和端口。
+// Linux 以小端序存储 IPv4，以反转的 32 位字存储 IPv6。
 func parseEndpoint(value string, family int) (string, int, error) {
 	addressHex, portHex, found := strings.Cut(value, ":")
 	if !found {
@@ -93,7 +93,7 @@ func parseEndpoint(value string, family int) (string, int, error) {
 	return net.IP(data).String(), int(port), nil
 }
 
-// socketState translates Linux hexadecimal state codes into readable TCP or UDP states.
+// socketState 将 Linux 十六进制状态码转换为可读的 TCP 或 UDP 状态。
 func socketState(protocol, value string) string {
 	if protocol == "udp" {
 		switch value {

@@ -1,4 +1,4 @@
-// Package network collects interfaces, addresses, DNS summaries, and IP routes.
+// network 包采集网络接口、地址、DNS 摘要和 IP 路由。
 package network
 
 import (
@@ -13,8 +13,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
-// ParseIPv4Routes parses /proc/net/route and converts Linux little-endian IPv4 fields.
-// Malformed rows are returned as errors while valid rows remain available.
+// ParseIPv4Routes 解析 /proc/net/route，并转换 Linux 小端序 IPv4 字段。
+// 格式错误的行以错误返回，格式正确的路由仍会保留。
 func ParseIPv4Routes(reader io.Reader) ([]model.Route, []error) {
 	routes := make([]model.Route, 0)
 	errorsFound := make([]error, 0)
@@ -59,7 +59,7 @@ func ParseIPv4Routes(reader io.Reader) ([]model.Route, []error) {
 	return routes, errorsFound
 }
 
-// parseLinuxIPv4Hex decodes the four-byte, little-endian hexadecimal address used by procfs.
+// parseLinuxIPv4Hex 解码 procfs 使用的四字节小端十六进制地址。
 func parseLinuxIPv4Hex(value string) (net.IP, error) {
 	data, err := hex.DecodeString(value)
 	if err != nil || len(data) != 4 {

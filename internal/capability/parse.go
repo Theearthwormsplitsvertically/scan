@@ -1,4 +1,4 @@
-// Package capability detects and parses Linux collection capabilities.
+// capability 包检测并解析 Linux 资产采集能力。
 package capability
 
 import (
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// SelfStatus is the subset of /proc/self/status needed for privilege detection.
+// SelfStatus 是权限检测所需的 /proc/self/status 字段子集。
 type SelfStatus struct {
 	UIDs   [4]uint32
 	GIDs   [4]uint32
@@ -16,7 +16,7 @@ type SelfStatus struct {
 	CapBnd uint64
 }
 
-// ParseOSRelease parses key/value data from /etc/os-release and skips malformed lines.
+// ParseOSRelease 解析 /etc/os-release 的键值数据，并跳过格式错误的行。
 func ParseOSRelease(data []byte) map[string]string {
 	values := make(map[string]string)
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -43,7 +43,7 @@ func ParseOSRelease(data []byte) map[string]string {
 	return values
 }
 
-// ParseSelfStatus extracts UID/GID sets and capability masks without failing on optional fields.
+// ParseSelfStatus 提取 UID/GID 集合和 capability 掩码，缺少可选字段时不失败。
 func ParseSelfStatus(data []byte) SelfStatus {
 	var result SelfStatus
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -66,7 +66,7 @@ func ParseSelfStatus(data []byte) SelfStatus {
 	return result
 }
 
-// parseFourUint32 parses Linux's four-value UID or GID fields atomically.
+// parseFourUint32 原子解析 Linux 的四值 UID 或 GID 字段。
 func parseFourUint32(fields []string, destination *[4]uint32) {
 	if len(fields) < len(destination) {
 		return

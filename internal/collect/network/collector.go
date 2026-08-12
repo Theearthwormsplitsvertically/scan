@@ -13,23 +13,23 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
-// InterfaceSource isolates standard-library interface queries so collectors are fixture-testable.
+// InterfaceSource 隔离标准库网络接口查询，使采集器可使用 fixture 测试。
 type InterfaceSource interface {
 	Interfaces() ([]net.Interface, error)
 	Addrs(net.Interface) ([]net.Addr, error)
 }
 
-// SystemInterfaceSource retrieves interfaces and addresses from the current network namespace.
+// SystemInterfaceSource 从当前网络命名空间获取接口和地址。
 type SystemInterfaceSource struct{}
 
-// Interfaces returns all interfaces visible to the current process.
+// Interfaces 返回当前进程可见的所有接口。
 func (SystemInterfaceSource) Interfaces() ([]net.Interface, error) { return net.Interfaces() }
 
-// Addrs returns addresses attached to one visible interface.
+// Addrs 返回一个可见接口绑定的地址。
 func (SystemInterfaceSource) Addrs(item net.Interface) ([]net.Addr, error) { return item.Addrs() }
 
-// Collect gathers interfaces and IPs from the standard library, routes from procfs, and a DNS digest.
-// It deliberately omits resolv.conf content and reports partial status for unavailable subdomains.
+// Collect 通过标准库采集接口和 IP，通过 procfs 采集路由，并生成 DNS 摘要。
+// 它有意不输出 resolv.conf 内容，子域不可用时返回 partial 状态。
 func Collect(ctx context.Context, root platform.Root, source InterfaceSource) ([]model.NetworkInterface, []model.Address, []model.Route, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "network", Status: model.StatusOK, StartedAt: started, Errors: []string{}}

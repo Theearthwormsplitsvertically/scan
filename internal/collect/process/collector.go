@@ -13,11 +13,11 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/security"
 )
 
-// processFileLimit bounds each procfs process read, including command lines.
+// processFileLimit 限制每次 procfs 进程读取的大小，包括命令行。
 const processFileLimit = 1 << 20
 
-// Collect enumerates numeric /proc entries and builds stable process identities.
-// A PID that exits during reading is retried once; remaining races become partial status.
+// Collect 枚举数值形式的 /proc 条目并构建稳定进程身份。
+// 读取期间退出的 PID 重试一次；仍存在的竞态被标为 partial 状态。
 func Collect(ctx context.Context, root platform.Root, bootID string) ([]model.Process, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "process", Status: model.StatusOK, StartedAt: started, Errors: []string{}}
@@ -55,7 +55,7 @@ func Collect(ctx context.Context, root platform.Root, bootID string) ([]model.Pr
 	return processes, finishStatus(status, started, len(processes))
 }
 
-// collectPID reads the allowed facts for one PID and deliberately never reads environ.
+// collectPID 读取一个 PID 的允许事实，并明确不读取 environ。
 func collectPID(root platform.Root, pid int, bootID string) (model.Process, error) {
 	prefix := fmt.Sprintf("/proc/%d", pid)
 	statData, err := root.ReadFile(prefix+"/stat", processFileLimit)
@@ -89,7 +89,7 @@ func collectPID(root platform.Root, pid int, bootID string) (model.Process, erro
 	return result, nil
 }
 
-// finishStatus stamps duration and object count after a process collection attempt.
+// finishStatus 在一次进程采集后填充耗时和对象数量。
 func finishStatus(status model.CollectorStatus, started time.Time, objects int) model.CollectorStatus {
 	status.FinishedAt = time.Now().UTC()
 	status.DurationMS = status.FinishedAt.Sub(started).Milliseconds()

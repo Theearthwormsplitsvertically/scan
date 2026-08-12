@@ -11,10 +11,10 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
-// factLimit prevents a malformed proc or sys fact file from consuming unbounded memory.
+// factLimit 防止异常的 proc 或 sys 事实文件消耗无界内存。
 const factLimit = 1 << 20
 
-// Collect gathers fixed, read-only host facts and marks missing optional DMI data as partial.
+// Collect 采集固定的只读主机事实，并将缺失的可选 DMI 数据标为 partial。
 func Collect(ctx context.Context, root platform.Root) (model.Host, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "host", Status: model.StatusOK, StartedAt: started, Errors: []string{}}

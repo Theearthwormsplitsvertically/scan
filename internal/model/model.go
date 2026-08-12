@@ -1,4 +1,4 @@
-// Package model defines the stable local JSON protocol shared by all collectors.
+// model 包定义所有采集器共享的稳定本地 JSON 协议。
 package model
 
 import (
@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-// SchemaVersion identifies the current snapshot and doctor JSON contract.
+// SchemaVersion 标识当前 snapshot 和 doctor JSON 协议版本。
 const SchemaVersion = "1.0"
 
-// Status records the outcome of a collector or a detected capability.
+// Status 记录采集器或已检测能力的结果。
 type Status string
 
-// Collector and capability status values distinguish complete results from safe degradation.
+// 这些采集器和能力状态值区分完整结果与安全降级结果。
 const (
 	StatusOK          Status = "ok"
 	StatusPartial     Status = "partial"
@@ -22,7 +22,7 @@ const (
 	StatusUnsupported Status = "unsupported"
 )
 
-// AgentInfo describes the executable that produced a report.
+// AgentInfo 描述生成报告的可执行文件。
 type AgentInfo struct {
 	Name      string `json:"name"`
 	Version   string `json:"version"`
@@ -30,7 +30,7 @@ type AgentInfo struct {
 	BuildTime string `json:"build_time"`
 }
 
-// ScanMetadata identifies one scan and records its wall-clock duration.
+// ScanMetadata 标识一次扫描并记录其墙钟耗时。
 type ScanMetadata struct {
 	ID         string    `json:"id"`
 	Type       string    `json:"type"`
@@ -39,7 +39,7 @@ type ScanMetadata struct {
 	DurationMS int64     `json:"duration_ms"`
 }
 
-// Capability states whether a Linux feature is usable and names its fallback when applicable.
+// Capability 说明某项 Linux 功能是否可用，并在适用时记录其降级路径。
 type Capability struct {
 	Name     string `json:"name"`
 	Status   Status `json:"status"`
@@ -47,12 +47,12 @@ type Capability struct {
 	Fallback string `json:"fallback,omitempty"`
 }
 
-// CapabilityReport groups all capability observations for a doctor or scan result.
+// CapabilityReport 汇总一次 doctor 或 scan 的所有能力观测结果。
 type CapabilityReport struct {
 	Items []Capability `json:"items"`
 }
 
-// DoctorReport is the lightweight environment and capability report from doctor.
+// DoctorReport 是 doctor 输出的轻量环境和能力报告。
 type DoctorReport struct {
 	SchemaVersion string           `json:"schema_version"`
 	Agent         AgentInfo        `json:"agent"`
@@ -64,7 +64,7 @@ type DoctorReport struct {
 	Capabilities  CapabilityReport `json:"capabilities"`
 }
 
-// Host contains host identity, operating system, hardware, and boot facts.
+// Host 包含主机身份、操作系统、硬件和启动事实。
 type Host struct {
 	ID             string `json:"id,omitempty"`
 	Hostname       string `json:"hostname,omitempty"`
@@ -83,7 +83,7 @@ type Host struct {
 	MemoryBytes    uint64 `json:"memory_bytes,omitempty"`
 }
 
-// NetworkInterface represents one operating-system network interface.
+// NetworkInterface 表示一个操作系统网络接口。
 type NetworkInterface struct {
 	Index        int      `json:"index"`
 	Name         string   `json:"name"`
@@ -94,7 +94,7 @@ type NetworkInterface struct {
 	DNSDigestSHA string   `json:"dns_digest_sha256,omitempty"`
 }
 
-// Address associates one IP CIDR with a network interface.
+// Address 将一个 IP CIDR 与网络接口关联。
 type Address struct {
 	InterfaceIndex int    `json:"interface_index"`
 	InterfaceName  string `json:"interface_name"`
@@ -102,7 +102,7 @@ type Address struct {
 	Family         int    `json:"family"`
 }
 
-// Route represents one normalized IP route.
+// Route 表示一条规范化的 IP 路由。
 type Route struct {
 	Interface   string `json:"interface"`
 	Destination string `json:"destination"`
@@ -111,7 +111,7 @@ type Route struct {
 	Family      int    `json:"family"`
 }
 
-// Process represents a process identity built from boot ID, PID, and start time.
+// Process 表示由 boot ID、PID 和启动时间构成的进程身份。
 type Process struct {
 	ID          string   `json:"id"`
 	PID         int      `json:"pid"`
@@ -131,7 +131,7 @@ type Process struct {
 	PIDNS       string   `json:"pid_namespace,omitempty"`
 }
 
-// Socket represents one TCP or UDP socket observed from /proc/net.
+// Socket 表示从 /proc/net 观测到的一个 TCP 或 UDP socket。
 type Socket struct {
 	ID            string   `json:"id"`
 	Protocol      string   `json:"protocol"`
@@ -147,41 +147,41 @@ type Socket struct {
 	ProcessIDs    []string `json:"process_ids"`
 }
 
-// Service reserves the JSON shape for a future service collector.
+// Service 为后续服务采集器预留 JSON 结构。
 type Service struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-// Package reserves the JSON shape for a future package collector.
+// Package 为后续软件包采集器预留 JSON 结构。
 type Package struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
 
-// Container reserves the JSON shape for a future container collector.
+// Container 为后续容器采集器预留 JSON 结构。
 type Container struct {
 	ID      string `json:"id"`
 	Name    string `json:"name,omitempty"`
 	Runtime string `json:"runtime,omitempty"`
 }
 
-// File reserves the JSON shape for a future executable and library collector.
+// File 为后续可执行文件和动态库采集器预留 JSON 结构。
 type File struct {
 	ID     string `json:"id"`
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256,omitempty"`
 }
 
-// Application reserves the JSON shape for a future deep application collector.
+// Application 为后续应用深度采集器预留 JSON 结构。
 type Application struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
 
-// Relationship records a directed, evidence-backed link between two collected objects.
+// Relationship 记录两个采集对象之间有证据支撑的有向关联。
 type Relationship struct {
 	ID         string    `json:"id"`
 	Type       string    `json:"type"`
@@ -193,7 +193,7 @@ type Relationship struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
-// CollectorStatus describes one collector's outcome without discarding other domains.
+// CollectorStatus 描述一个采集器的结果，不影响其他采集域。
 type CollectorStatus struct {
 	Collector  string    `json:"collector"`
 	Status     Status    `json:"status"`
@@ -205,14 +205,14 @@ type CollectorStatus struct {
 	Fallback   string    `json:"fallback,omitempty"`
 }
 
-// ResourceUsage records the Agent's own resource measurements for one scan.
+// ResourceUsage 记录 Agent 在一次扫描中的自身资源指标。
 type ResourceUsage struct {
 	WallTimeMS     int64  `json:"wall_time_ms"`
 	HeapAllocBytes uint64 `json:"heap_alloc_bytes"`
 	HeapDeltaBytes int64  `json:"heap_delta_bytes"`
 }
 
-// Snapshot is the complete one-shot scan document written by the Agent.
+// Snapshot 是 Agent 写出的完整一次性扫描文档。
 type Snapshot struct {
 	SchemaVersion     string             `json:"schema_version"`
 	Scan              ScanMetadata       `json:"scan"`
@@ -234,7 +234,7 @@ type Snapshot struct {
 	ResourceUsage     ResourceUsage      `json:"resource_usage"`
 }
 
-// MarshalJSON normalizes every collection to [] so downstream consumers never receive null.
+// MarshalJSON 将每个集合规范化为 []，避免下游消费者收到 null。
 func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
 	normalized := snapshot
 	normalized.Capabilities.Items = ensureSlice(normalized.Capabilities.Items)
@@ -268,7 +268,7 @@ func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
 	return json.Marshal(snapshotAlias(normalized))
 }
 
-// ensureSlice converts a nil collection to an empty collection while preserving non-nil slices.
+// ensureSlice 将 nil 集合转换为空集合，同时保留非 nil 切片。
 func ensureSlice[T any](items []T) []T {
 	if items == nil {
 		return []T{}
