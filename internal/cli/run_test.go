@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -144,5 +146,79 @@ func TestRunWatchIsExplicitlyReserved(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "not implemented in this milestone") {
 		t.Fatalf("stderr = %q, want milestone message", stderr.String())
+	}
+}
+
+func TestRunScanOutputDashWritesStdout(t *testing.T) {
+	t.Parallel()
+
+	runtime := fakeRuntime{snapshot: model.Snapshot{SchemaVersion: model.SchemaVersion}}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "--output", "-"}, &stdout, &stderr, runtime)
+
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"schema_version":"1.0"`) {
+		t.Fatalf("stdout = %q, want snapshot", stdout.String())
+	}
+}
+
+func TestRunScanOutputPathWritesFile(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	runtime := fakeRuntime{snapshot: model.Snapshot{SchemaVersion: model.SchemaVersion}}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "--output", path}, &stdout, &stderr, runtime)
+
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Contains(content, []byte(`"schema_version":"1.0"`)) {
+		t.Fatalf("content = %q, want snapshot", content)
+	}
+}
+
+func TestRunScanRejectsMissingOutputValue(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "--output"}, &stdout, &stderr, fakeRuntime{})
+
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "requires a path") {
+		t.Fatalf("stderr = %q, want missing path error", stderr.String())
+	}
+}
+
+func TestRunScanRejectsUnknownOption(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "--upload"}, &stdout, &stderr, fakeRuntime{})
+
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown scan option") {
+		t.Fatalf("stderr = %q, want unknown option error", stderr.String())
 	}
 }
