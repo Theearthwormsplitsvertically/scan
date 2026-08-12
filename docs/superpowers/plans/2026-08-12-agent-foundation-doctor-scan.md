@@ -29,13 +29,15 @@
 - Create: `go.mod`
 - Create: `cmd/asset-agent/main.go`
 - Create: `internal/buildinfo/version.go`
+- Create: `internal/model/model.go`
+- Create: `internal/agent/runtime.go`
 - Create: `internal/cli/run.go`
 - Test: `internal/cli/run_test.go`
 
 **Interfaces:**
 - Produces: `cli.Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime) int`.
 - Produces: build variables `buildinfo.Version`, `buildinfo.Commit`, and `buildinfo.BuildTime` with safe development defaults.
-- Consumes: `agent.Runtime`, introduced initially as the exact interface below and implemented in later tasks.
+- Produces: the `agent.Runtime` boundary and initial `model.DoctorReport` and `model.Snapshot` types used by CLI fakes; later tasks extend those types without changing the boundary.
 
 - [ ] **Step 1: Initialize the module and write the failing CLI tests**
 
@@ -75,7 +77,7 @@ type Runtime interface {
 }
 ```
 
-Parse exactly `version`, `doctor`, and `scan`; reserve `watch` with an explicit “not implemented in this milestone” error and exit code 2. Encode `version` as JSON. `main.go` passes `os.Args[1:]`, `os.Stdout`, and `os.Stderr` to `cli.Run`.
+Create the complete JSON field layout in `internal/model/model.go` so no later task needs to rename fields. Parse exactly `version`, `doctor`, and `scan`; reserve `watch` with an explicit “not implemented in this milestone” error and exit code 2. Encode `version` as JSON. Until Task 3 supplies Linux wiring, `main.go` passes an `agent.UnavailableRuntime` to `cli.Run`; `version` works and collection commands return a clear target-platform error.
 
 - [ ] **Step 4: Run the CLI tests and all current tests**
 
@@ -86,14 +88,14 @@ Expected: PASS with no warnings.
 - [ ] **Step 5: Commit the CLI contract**
 
 ```powershell
-git add -- go.mod cmd/asset-agent internal/buildinfo internal/cli internal/agent/runtime.go
+git add -- go.mod cmd/asset-agent internal/buildinfo internal/model internal/cli internal/agent/runtime.go
 git commit -m "feat: add asset agent CLI contract"
 ```
 
 ### Task 2: Stable Output Model and Atomic JSON Reporter
 
 **Files:**
-- Create: `internal/model/model.go`
+- Modify: `internal/model/model.go`
 - Create: `internal/report/json.go`
 - Test: `internal/report/json_test.go`
 - Modify: `internal/cli/run.go`
@@ -427,4 +429,3 @@ Expected: every command exits 0 with no warnings from project code.
 git add -- README.md scripts/verify-linux.sh .gitignore internal/cli/run_test.go
 git commit -m "docs: add Linux agent PoC verification guide"
 ```
-
