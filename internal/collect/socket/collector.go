@@ -1,3 +1,4 @@
+// Package socket collects TCP/UDP facts and maps socket inodes to processes.
 package socket
 
 import (
@@ -10,6 +11,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
+// Collect parses all supported procfs socket tables, then correlates their inodes to processes.
+// It reports /proc/net as the current fallback until a direct SockDiag collector is added.
 func Collect(ctx context.Context, root platform.Root, processes []model.Process) ([]model.Socket, []model.Relationship, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "socket", Status: model.StatusOK, StartedAt: started, Errors: []string{}, Fallback: "/proc/net"}
@@ -47,6 +50,7 @@ func Collect(ctx context.Context, root platform.Root, processes []model.Process)
 	return sockets, relationships, finish(status, started, len(sockets))
 }
 
+// finish stamps duration and object count on the socket collector status.
 func finish(status model.CollectorStatus, started time.Time, objects int) model.CollectorStatus {
 	status.FinishedAt = time.Now().UTC()
 	status.DurationMS = status.FinishedAt.Sub(started).Milliseconds()

@@ -1,3 +1,4 @@
+// Package process collects read-only process facts and process identities from procfs.
 package process
 
 import (
@@ -7,6 +8,7 @@ import (
 	"strings"
 )
 
+// Stat is the parsed identity-bearing subset of /proc/<pid>/stat.
 type Stat struct {
 	PID       int
 	Command   string
@@ -15,6 +17,7 @@ type Stat struct {
 	StartTime uint64
 }
 
+// ParseStat parses procfs stat lines even when the command contains spaces or parentheses.
 func ParseStat(data []byte) (Stat, error) {
 	line := strings.TrimSpace(string(data))
 	open := strings.IndexByte(line, '(')
@@ -41,6 +44,7 @@ func ParseStat(data []byte) (Stat, error) {
 	return Stat{PID: pid, Command: line[open+1 : close], State: fields[0], PPID: ppid, StartTime: startTime}, nil
 }
 
+// ParseCmdline splits the NUL-delimited /proc/<pid>/cmdline representation.
 func ParseCmdline(data []byte) []string {
 	parts := bytes.Split(data, []byte{0})
 	result := make([]string, 0, len(parts))
@@ -52,6 +56,7 @@ func ParseCmdline(data []byte) []string {
 	return result
 }
 
+// ParseIDs returns the real UID and GID recorded in a /proc/<pid>/status document.
 func ParseIDs(data []byte) (uid, gid int) {
 	uid, gid = -1, -1
 	for _, line := range strings.Split(string(data), "\n") {

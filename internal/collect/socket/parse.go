@@ -12,6 +12,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
+// ParseProcNet normalizes one /proc/net/tcp*, udp*, or IPv6 table into Socket records.
+// Invalid rows are returned separately so one damaged procfs row does not discard valid sockets.
 func ParseProcNet(reader io.Reader, protocol string, family int, netns string) ([]model.Socket, []error) {
 	result := make([]model.Socket, 0)
 	errorsFound := make([]error, 0)
@@ -55,6 +57,8 @@ func ParseProcNet(reader io.Reader, protocol string, family int, netns string) (
 	return result, errorsFound
 }
 
+// parseEndpoint decodes one hexadecimal procfs endpoint into an IP address and port.
+// Linux stores IPv4 values little-endian and IPv6 values in reversed 32-bit words.
 func parseEndpoint(value string, family int) (string, int, error) {
 	addressHex, portHex, found := strings.Cut(value, ":")
 	if !found {
@@ -89,6 +93,7 @@ func parseEndpoint(value string, family int) (string, int, error) {
 	return net.IP(data).String(), int(port), nil
 }
 
+// socketState translates Linux hexadecimal state codes into readable TCP or UDP states.
 func socketState(protocol, value string) string {
 	if protocol == "udp" {
 		switch value {

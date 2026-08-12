@@ -13,8 +13,11 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/security"
 )
 
+// processFileLimit bounds each procfs process read, including command lines.
 const processFileLimit = 1 << 20
 
+// Collect enumerates numeric /proc entries and builds stable process identities.
+// A PID that exits during reading is retried once; remaining races become partial status.
 func Collect(ctx context.Context, root platform.Root, bootID string) ([]model.Process, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "process", Status: model.StatusOK, StartedAt: started, Errors: []string{}}
@@ -52,6 +55,7 @@ func Collect(ctx context.Context, root platform.Root, bootID string) ([]model.Pr
 	return processes, finishStatus(status, started, len(processes))
 }
 
+// collectPID reads the allowed facts for one PID and deliberately never reads environ.
 func collectPID(root platform.Root, pid int, bootID string) (model.Process, error) {
 	prefix := fmt.Sprintf("/proc/%d", pid)
 	statData, err := root.ReadFile(prefix+"/stat", processFileLimit)
@@ -85,6 +89,7 @@ func collectPID(root platform.Root, pid int, bootID string) (model.Process, erro
 	return result, nil
 }
 
+// finishStatus stamps duration and object count after a process collection attempt.
 func finishStatus(status model.CollectorStatus, started time.Time, objects int) model.CollectorStatus {
 	status.FinishedAt = time.Now().UTC()
 	status.DurationMS = status.FinishedAt.Sub(started).Milliseconds()

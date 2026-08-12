@@ -13,16 +13,23 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
+// InterfaceSource isolates standard-library interface queries so collectors are fixture-testable.
 type InterfaceSource interface {
 	Interfaces() ([]net.Interface, error)
 	Addrs(net.Interface) ([]net.Addr, error)
 }
 
+// SystemInterfaceSource retrieves interfaces and addresses from the current network namespace.
 type SystemInterfaceSource struct{}
 
-func (SystemInterfaceSource) Interfaces() ([]net.Interface, error)         { return net.Interfaces() }
+// Interfaces returns all interfaces visible to the current process.
+func (SystemInterfaceSource) Interfaces() ([]net.Interface, error) { return net.Interfaces() }
+
+// Addrs returns addresses attached to one visible interface.
 func (SystemInterfaceSource) Addrs(item net.Interface) ([]net.Addr, error) { return item.Addrs() }
 
+// Collect gathers interfaces and IPs from the standard library, routes from procfs, and a DNS digest.
+// It deliberately omits resolv.conf content and reports partial status for unavailable subdomains.
 func Collect(ctx context.Context, root platform.Root, source InterfaceSource) ([]model.NetworkInterface, []model.Address, []model.Route, model.CollectorStatus) {
 	started := time.Now().UTC()
 	status := model.CollectorStatus{Collector: "network", Status: model.StatusOK, StartedAt: started, Errors: []string{}}

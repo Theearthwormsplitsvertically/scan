@@ -11,11 +11,14 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
+// FDSource is the narrow procfs file-descriptor view needed for socket ownership correlation.
 type FDSource interface {
 	ReadDir(string) ([]fs.DirEntry, error)
 	Readlink(string) (string, error)
 }
 
+// Correlate links socket inodes to process identities using /proc/<pid>/fd symlinks.
+// Only exact socket:[inode] evidence generates a socket_process relationship.
 func Correlate(source FDSource, sockets []model.Socket, processes []model.Process) ([]model.Socket, []model.Relationship) {
 	byInode := make(map[uint64]int, len(sockets))
 	for index := range sockets {
@@ -62,6 +65,7 @@ func Correlate(source FDSource, sockets []model.Socket, processes []model.Proces
 	return sockets, relationships
 }
 
+// parseSocketLink accepts only the exact Linux socket descriptor link format.
 func parseSocketLink(value string) (uint64, bool) {
 	if !strings.HasPrefix(value, "socket:[") || !strings.HasSuffix(value, "]") {
 		return 0, false

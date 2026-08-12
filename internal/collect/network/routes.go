@@ -1,3 +1,4 @@
+// Package network collects interfaces, addresses, DNS summaries, and IP routes.
 package network
 
 import (
@@ -12,6 +13,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
+// ParseIPv4Routes parses /proc/net/route and converts Linux little-endian IPv4 fields.
+// Malformed rows are returned as errors while valid rows remain available.
 func ParseIPv4Routes(reader io.Reader) ([]model.Route, []error) {
 	routes := make([]model.Route, 0)
 	errorsFound := make([]error, 0)
@@ -56,6 +59,7 @@ func ParseIPv4Routes(reader io.Reader) ([]model.Route, []error) {
 	return routes, errorsFound
 }
 
+// parseLinuxIPv4Hex decodes the four-byte, little-endian hexadecimal address used by procfs.
 func parseLinuxIPv4Hex(value string) (net.IP, error) {
 	data, err := hex.DecodeString(value)
 	if err != nil || len(data) != 4 {

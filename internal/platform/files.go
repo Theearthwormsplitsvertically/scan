@@ -1,3 +1,4 @@
+// Package platform provides bounded, read-only access to a Linux-shaped filesystem root.
 package platform
 
 import (
@@ -10,10 +11,12 @@ import (
 	"strings"
 )
 
+// Root maps Linux absolute paths into one trusted filesystem root.
 type Root struct {
 	base string
 }
 
+// NewRoot creates a cleaned absolute root for production or fixture reads.
 func NewRoot(base string) Root {
 	absolute, err := filepath.Abs(base)
 	if err != nil {
@@ -22,6 +25,7 @@ func NewRoot(base string) Root {
 	return Root{base: filepath.Clean(absolute)}
 }
 
+// Path maps an absolute Linux path into Root and rejects paths that escape it.
 func (root Root) Path(absoluteLinuxPath string) (string, error) {
 	if !strings.HasPrefix(absoluteLinuxPath, "/") {
 		return "", fmt.Errorf("path must be absolute: %q", absoluteLinuxPath)
@@ -40,6 +44,7 @@ func (root Root) Path(absoluteLinuxPath string) (string, error) {
 	return resolved, nil
 }
 
+// ReadFile reads at most maximum bytes from a permitted path.
 func (root Root) ReadFile(path string, maximum int64) ([]byte, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -60,6 +65,7 @@ func (root Root) ReadFile(path string, maximum int64) ([]byte, error) {
 	return data, nil
 }
 
+// ReadDir returns direct directory entries from a permitted path.
 func (root Root) ReadDir(path string) ([]fs.DirEntry, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -68,6 +74,7 @@ func (root Root) ReadDir(path string) ([]fs.DirEntry, error) {
 	return os.ReadDir(resolved)
 }
 
+// Readlink resolves a permitted symbolic link without following it.
 func (root Root) Readlink(path string) (string, error) {
 	resolved, err := root.Path(path)
 	if err != nil {
@@ -76,6 +83,7 @@ func (root Root) Readlink(path string) (string, error) {
 	return os.Readlink(resolved)
 }
 
+// Stat returns metadata for a permitted path.
 func (root Root) Stat(path string) (fs.FileInfo, error) {
 	resolved, err := root.Path(path)
 	if err != nil {

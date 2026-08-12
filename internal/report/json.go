@@ -1,3 +1,4 @@
+// Package report serializes Agent results as local JSON documents.
 package report
 
 import (
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 )
 
+// WriteJSON emits one readable JSON document terminated by a single newline.
+// HTML escaping is disabled so operator-facing paths and text stay readable.
 func WriteJSON(writer io.Writer, value any) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
@@ -17,6 +20,8 @@ func WriteJSON(writer io.Writer, value any) error {
 	return nil
 }
 
+// WriteJSONFile atomically publishes a JSON report at path.
+// It writes a same-directory 0600 temporary file, syncs it, and then renames it.
 func WriteJSONFile(path string, value any) (resultErr error) {
 	directory := filepath.Dir(path)
 	temporary, err := os.CreateTemp(directory, ".tmp-asset-agent-*")

@@ -1,3 +1,4 @@
+// Package model defines the stable local JSON protocol shared by all collectors.
 package model
 
 import (
@@ -5,10 +6,13 @@ import (
 	"time"
 )
 
+// SchemaVersion identifies the current snapshot and doctor JSON contract.
 const SchemaVersion = "1.0"
 
+// Status records the outcome of a collector or a detected capability.
 type Status string
 
+// Collector and capability status values distinguish complete results from safe degradation.
 const (
 	StatusOK          Status = "ok"
 	StatusPartial     Status = "partial"
@@ -18,6 +22,7 @@ const (
 	StatusUnsupported Status = "unsupported"
 )
 
+// AgentInfo describes the executable that produced a report.
 type AgentInfo struct {
 	Name      string `json:"name"`
 	Version   string `json:"version"`
@@ -25,6 +30,7 @@ type AgentInfo struct {
 	BuildTime string `json:"build_time"`
 }
 
+// ScanMetadata identifies one scan and records its wall-clock duration.
 type ScanMetadata struct {
 	ID         string    `json:"id"`
 	Type       string    `json:"type"`
@@ -33,6 +39,7 @@ type ScanMetadata struct {
 	DurationMS int64     `json:"duration_ms"`
 }
 
+// Capability states whether a Linux feature is usable and names its fallback when applicable.
 type Capability struct {
 	Name     string `json:"name"`
 	Status   Status `json:"status"`
@@ -40,10 +47,12 @@ type Capability struct {
 	Fallback string `json:"fallback,omitempty"`
 }
 
+// CapabilityReport groups all capability observations for a doctor or scan result.
 type CapabilityReport struct {
 	Items []Capability `json:"items"`
 }
 
+// DoctorReport is the lightweight environment and capability report from doctor.
 type DoctorReport struct {
 	SchemaVersion string           `json:"schema_version"`
 	Agent         AgentInfo        `json:"agent"`
@@ -55,6 +64,7 @@ type DoctorReport struct {
 	Capabilities  CapabilityReport `json:"capabilities"`
 }
 
+// Host contains host identity, operating system, hardware, and boot facts.
 type Host struct {
 	ID             string `json:"id,omitempty"`
 	Hostname       string `json:"hostname,omitempty"`
@@ -73,6 +83,7 @@ type Host struct {
 	MemoryBytes    uint64 `json:"memory_bytes,omitempty"`
 }
 
+// NetworkInterface represents one operating-system network interface.
 type NetworkInterface struct {
 	Index        int      `json:"index"`
 	Name         string   `json:"name"`
@@ -83,6 +94,7 @@ type NetworkInterface struct {
 	DNSDigestSHA string   `json:"dns_digest_sha256,omitempty"`
 }
 
+// Address associates one IP CIDR with a network interface.
 type Address struct {
 	InterfaceIndex int    `json:"interface_index"`
 	InterfaceName  string `json:"interface_name"`
@@ -90,6 +102,7 @@ type Address struct {
 	Family         int    `json:"family"`
 }
 
+// Route represents one normalized IP route.
 type Route struct {
 	Interface   string `json:"interface"`
 	Destination string `json:"destination"`
@@ -98,6 +111,7 @@ type Route struct {
 	Family      int    `json:"family"`
 }
 
+// Process represents a process identity built from boot ID, PID, and start time.
 type Process struct {
 	ID          string   `json:"id"`
 	PID         int      `json:"pid"`
@@ -117,6 +131,7 @@ type Process struct {
 	PIDNS       string   `json:"pid_namespace,omitempty"`
 }
 
+// Socket represents one TCP or UDP socket observed from /proc/net.
 type Socket struct {
 	ID            string   `json:"id"`
 	Protocol      string   `json:"protocol"`
@@ -132,35 +147,41 @@ type Socket struct {
 	ProcessIDs    []string `json:"process_ids"`
 }
 
+// Service reserves the JSON shape for a future service collector.
 type Service struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+// Package reserves the JSON shape for a future package collector.
 type Package struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
 
+// Container reserves the JSON shape for a future container collector.
 type Container struct {
 	ID      string `json:"id"`
 	Name    string `json:"name,omitempty"`
 	Runtime string `json:"runtime,omitempty"`
 }
 
+// File reserves the JSON shape for a future executable and library collector.
 type File struct {
 	ID     string `json:"id"`
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256,omitempty"`
 }
 
+// Application reserves the JSON shape for a future deep application collector.
 type Application struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
 
+// Relationship records a directed, evidence-backed link between two collected objects.
 type Relationship struct {
 	ID         string    `json:"id"`
 	Type       string    `json:"type"`
@@ -172,6 +193,7 @@ type Relationship struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
+// CollectorStatus describes one collector's outcome without discarding other domains.
 type CollectorStatus struct {
 	Collector  string    `json:"collector"`
 	Status     Status    `json:"status"`
@@ -183,12 +205,14 @@ type CollectorStatus struct {
 	Fallback   string    `json:"fallback,omitempty"`
 }
 
+// ResourceUsage records the Agent's own resource measurements for one scan.
 type ResourceUsage struct {
 	WallTimeMS     int64  `json:"wall_time_ms"`
 	HeapAllocBytes uint64 `json:"heap_alloc_bytes"`
 	HeapDeltaBytes int64  `json:"heap_delta_bytes"`
 }
 
+// Snapshot is the complete one-shot scan document written by the Agent.
 type Snapshot struct {
 	SchemaVersion     string             `json:"schema_version"`
 	Scan              ScanMetadata       `json:"scan"`
@@ -210,6 +234,7 @@ type Snapshot struct {
 	ResourceUsage     ResourceUsage      `json:"resource_usage"`
 }
 
+// MarshalJSON normalizes every collection to [] so downstream consumers never receive null.
 func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
 	normalized := snapshot
 	normalized.Capabilities.Items = ensureSlice(normalized.Capabilities.Items)
@@ -243,6 +268,7 @@ func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
 	return json.Marshal(snapshotAlias(normalized))
 }
 
+// ensureSlice converts a nil collection to an empty collection while preserving non-nil slices.
 func ensureSlice[T any](items []T) []T {
 	if items == nil {
 		return []T{}

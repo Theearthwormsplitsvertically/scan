@@ -1,3 +1,4 @@
+// Package host collects host identity, operating-system, CPU, and memory facts.
 package host
 
 import (
@@ -7,6 +8,7 @@ import (
 	"strings"
 )
 
+// ParseMemoryBytes converts MemTotal from /proc/meminfo into bytes.
 func ParseMemoryBytes(data []byte) uint64 {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
@@ -26,6 +28,7 @@ func ParseMemoryBytes(data []byte) uint64 {
 	return 0
 }
 
+// ParseCPUModel returns the first useful x86 or ARM model description from /proc/cpuinfo.
 func ParseCPUModel(data []byte) string {
 	values := make(map[string]string)
 	scanner := bufio.NewScanner(bytes.NewReader(data))

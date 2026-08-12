@@ -1,3 +1,4 @@
+// Package cli parses local Agent commands and writes their JSON results.
 package cli
 
 import (
@@ -10,6 +11,8 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/report"
 )
 
+// Run dispatches version, doctor, and scan commands and returns a process exit code.
+// Exit code 2 means invalid usage; exit code 1 means a runtime or output failure.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "unknown command \"\"; use version, doctor, or scan")
@@ -68,6 +71,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime a
 	}
 }
 
+// runScan validates scan-only options, executes one runtime scan, and selects stdout or a file.
 func runScan(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime) int {
 	output := "-"
 	if len(args) > 0 {

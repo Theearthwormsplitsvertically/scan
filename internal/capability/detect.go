@@ -10,8 +10,11 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
 )
 
+// smallFactLimit bounds every lightweight fact read during capability detection.
 const smallFactLimit = 1 << 20
 
+// Detect builds a doctor report from fixed read-only Linux fact paths.
+// Missing optional facts are returned as capability degradation rather than a fatal error.
 func Detect(ctx context.Context, root platform.Root, architecture string) model.DoctorReport {
 	report := model.DoctorReport{
 		SchemaVersion: model.SchemaVersion,
@@ -79,6 +82,7 @@ func Detect(ctx context.Context, root platform.Root, architecture string) model.
 	return report
 }
 
+// formatCapabilities renders a Linux capability bit mask without external commands.
 func formatCapabilities(value uint64) string {
 	const digits = "0123456789abcdef"
 	buffer := make([]byte, 18)
@@ -90,6 +94,7 @@ func formatCapabilities(value uint64) string {
 	return string(buffer)
 }
 
+// securityModuleCapability converts an SELinux or AppArmor enable file into a capability record.
 func securityModuleCapability(root platform.Root, name, path, enabledValue string) model.Capability {
 	data, err := root.ReadFile(path, smallFactLimit)
 	if err != nil {
@@ -102,6 +107,7 @@ func securityModuleCapability(root platform.Root, name, path, enabledValue strin
 	return model.Capability{Name: name, Status: model.StatusOK, Detail: detail}
 }
 
+// socketCapability reports whether a local runtime control socket exists or is inaccessible.
 func socketCapability(root platform.Root, name, path string) model.Capability {
 	if _, err := root.Stat(path); err == nil {
 		return model.Capability{Name: name, Status: model.StatusOK, Detail: "socket detected"}
