@@ -214,6 +214,7 @@ type ResourceUsage struct {
 
 // Snapshot 是 Agent 写出的完整一次性扫描文档。
 type Snapshot struct {
+	SchemaName        string             `json:"schema_name"`
 	SchemaVersion     string             `json:"schema_version"`
 	Scan              ScanMetadata       `json:"scan"`
 	Agent             AgentInfo          `json:"agent"`

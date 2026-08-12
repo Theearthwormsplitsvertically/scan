@@ -11,4 +11,5 @@ import (
 type Runtime interface {
 	Doctor(context.Context) (model.DoctorReport, error)
 	Scan(context.Context) (model.Snapshot, error)
+	ScanModule(context.Context, Module) (model.ModuleReport, error)
 }

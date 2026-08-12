@@ -14,12 +14,19 @@ import (
 // Run 分派 version、doctor、scan 命令并返回进程退出码。
 // 退出码 2 表示命令用法错误；退出码 1 表示运行时或输出失败。
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime) int {
+	return runWithEnvironment(ctx, args, stdout, stderr, runtime, productionEnvironment())
+}
+
+func runWithEnvironment(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime, env environment) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "unknown command \"\"; use version, doctor, or scan")
 		return 2
 	}
 
 	switch args[0] {
+	case "help", "--help", "-h":
+		writeHelp(stdout)
+		return 0
 	case "version":
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, "version accepts no options")
@@ -64,7 +71,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime a
 		}
 		return 0
 	case "scan":
-		return runScan(ctx, args[1:], stdout, stderr, runtime)
+		return runScan(ctx, args[1:], stdout, stderr, runtime, env)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q; use version, doctor, or scan\n", args[0])
 		return 2
@@ -72,40 +79,41 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, runtime a
 }
 
 // runScan 校验 scan 专用参数、执行一次扫描，并选择标准输出或指定文件。
-func runScan(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime) int {
-	output := "-"
-	if len(args) > 0 {
-		if args[0] != "--output" {
-			fmt.Fprintf(stderr, "unknown scan option %q\n", args[0])
-			return 2
-		}
-		if len(args) < 2 {
-			fmt.Fprintln(stderr, "--output requires a path")
-			return 2
-		}
-		if len(args) > 2 {
-			fmt.Fprintf(stderr, "unknown scan option %q\n", args[2])
-			return 2
-		}
-		output = args[1]
+func runScan(ctx context.Context, args []string, stdout, stderr io.Writer, runtime agent.Runtime, env environment) int {
+	options, err := parseScanOptions(args)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if options.help {
+		writeScanHelp(stdout)
+		return 0
 	}
 	if runtime == nil {
 		fmt.Fprintln(stderr, "runtime unavailable")
 		return 1
 	}
-	value, err := runtime.Scan(ctx)
+	var value any
+	if options.module == agent.ModuleAll {
+		value, err = runtime.Scan(ctx)
+	} else {
+		value, err = runtime.ScanModule(ctx, options.module)
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "scan: %v\n", err)
 		return 1
 	}
-	if output == "-" {
-		err = report.WriteJSON(stdout, value)
-	} else {
-		err = report.WriteJSONFile(output, value)
-	}
-	if err != nil {
+	if err := writeScanResult(stdout, value, string(options.module), options.output, options.explicitOutput, env); err != nil {
 		fmt.Fprintf(stderr, "write scan report: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+func writeHelp(writer io.Writer) {
+	fmt.Fprintln(writer, "usage: asset-agent <version|doctor|scan>\n       asset-agent scan [all|host|network|process|socket] [-o path]")
+}
+
+func writeScanHelp(writer io.Writer) {
+	fmt.Fprintln(writer, "usage: asset-agent scan [all|host|network|process|socket] [-o path]\nplanned: service, package, container, application, file, security")
 }

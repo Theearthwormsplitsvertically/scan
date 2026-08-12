@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Theearthwormsplitsvertically/scan/internal/agent"
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
@@ -18,6 +20,9 @@ type fakeRuntime struct {
 	doctorErr    error
 	snapshot     model.Snapshot
 	scanErr      error
+	moduleReport model.ModuleReport
+	moduleErr    error
+	moduleSeen   *agent.Module
 }
 
 func (f fakeRuntime) Doctor(context.Context) (model.DoctorReport, error) {
@@ -26,6 +31,13 @@ func (f fakeRuntime) Doctor(context.Context) (model.DoctorReport, error) {
 
 func (f fakeRuntime) Scan(context.Context) (model.Snapshot, error) {
 	return f.snapshot, f.scanErr
+}
+
+func (f fakeRuntime) ScanModule(_ context.Context, module agent.Module) (model.ModuleReport, error) {
+	if f.moduleSeen != nil {
+		*f.moduleSeen = module
+	}
+	return f.moduleReport, f.moduleErr
 }
 
 func TestRunVersionWritesMachineReadableVersion(t *testing.T) {
@@ -91,7 +103,7 @@ func TestRunScanWritesRuntimeSnapshot(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"scan"}, &stdout, &stderr, runtime)
+	code := Run(context.Background(), []string{"scan", "-o", "-"}, &stdout, &stderr, runtime)
 
 	if code != 0 {
 		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
@@ -180,8 +192,8 @@ func TestRunScanOutputPathWritesFile(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout = %q, want empty", stdout.String())
+	if strings.TrimSpace(stdout.String()) != path {
+		t.Fatalf("stdout = %q, want report path %q", stdout.String(), path)
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -231,7 +243,7 @@ func TestRunScanSerializesAllCollectionsAsArrays(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"scan"}, &stdout, &stderr, runtime)
+	code := Run(context.Background(), []string{"scan", "-o", "-"}, &stdout, &stderr, runtime)
 
 	if code != 0 {
 		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
@@ -244,5 +256,78 @@ func TestRunScanSerializesAllCollectionsAsArrays(t *testing.T) {
 		if got := string(document[field]); got != "[]" {
 			t.Fatalf("%s = %s, want []", field, got)
 		}
+	}
+}
+
+func TestRunScanModuleRoutesSelectedModuleToStdout(t *testing.T) {
+	t.Parallel()
+
+	var seen agent.Module
+	runtime := fakeRuntime{
+		moduleSeen: &seen,
+		moduleReport: model.ModuleReport{
+			SchemaName: model.ModuleReportSchemaName,
+			Module:     "socket",
+		},
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "socket", "-o", "-"}, &stdout, &stderr, runtime)
+
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
+	}
+	if seen != agent.ModuleSocket {
+		t.Fatalf("module = %q, want socket", seen)
+	}
+	if !strings.Contains(stdout.String(), `"schema_name":"asset-agent.module-report"`) {
+		t.Fatalf("stdout = %q, want module report", stdout.String())
+	}
+}
+
+func TestRunScanDefaultsToOutputBesideExecutable(t *testing.T) {
+	t.Parallel()
+
+	installDir := t.TempDir()
+	executable := filepath.Join(installDir, "asset-agent")
+	if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runtime := fakeRuntime{snapshot: model.Snapshot{SchemaName: model.SnapshotSchemaName, SchemaVersion: model.SchemaVersion}}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	env := environment{
+		executablePath: func() (string, error) { return executable, nil },
+		now:            func() time.Time { return time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC) },
+	}
+
+	code := runWithEnvironment(context.Background(), []string{"scan"}, &stdout, &stderr, runtime, env)
+
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
+	}
+	want := filepath.Join(installDir, "output", "all-20260812T010203Z.json")
+	if strings.TrimSpace(stdout.String()) != want {
+		t.Fatalf("stdout = %q, want path %q", stdout.String(), want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("default report: %v", err)
+	}
+}
+
+func TestRunScanRejectsUnimplementedModule(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan", "service"}, &stdout, &stderr, fakeRuntime{})
+
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "not implemented") {
+		t.Fatalf("stderr = %q, want not implemented", stderr.String())
 	}
 }

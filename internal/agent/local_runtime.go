@@ -48,3 +48,8 @@ func (UnavailableRuntime) Doctor(context.Context) (model.DoctorReport, error) {
 func (UnavailableRuntime) Scan(context.Context) (model.Snapshot, error) {
 	return model.Snapshot{}, errors.New("asset collection requires Linux")
 }
+
+// ScanModule 说明当前可执行文件不能在非 Linux 系统执行模块扫描。
+func (UnavailableRuntime) ScanModule(context.Context, Module) (model.ModuleReport, error) {
+	return model.ModuleReport{}, errors.New("asset collection requires Linux")
+}

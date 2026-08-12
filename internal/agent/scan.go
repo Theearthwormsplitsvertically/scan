@@ -89,6 +89,7 @@ func (local *LocalRuntime) Scan(ctx context.Context) (model.Snapshot, error) {
 // newSnapshot 创建符合完整 schema 的文档，并初始化全部集合字段。
 func newSnapshot(started time.Time) model.Snapshot {
 	return model.Snapshot{
+		SchemaName:        model.SnapshotSchemaName,
 		SchemaVersion:     model.SchemaVersion,
 		Scan:              model.ScanMetadata{ID: fmt.Sprintf("scan-%d", started.UnixNano()), Type: "full", StartedAt: started},
 		Agent:             model.AgentInfo{Name: "asset-agent", Version: buildinfo.Version, Commit: buildinfo.Commit, BuildTime: buildinfo.BuildTime},
