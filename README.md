@@ -1,5 +1,18 @@
 # Linux Asset Agent
 
+## 扫描前置画像与策略选择
+
+每次执行 `scan`（包括单模块和 `all`）都会先执行一次只读系统画像。Agent 识别发行版、版本、内核、架构、init、cgroup、安全组件、容器运行时和可用数据源，然后再为所选模块选择采集后端。
+
+报告中的 `system_profile` 保存本次判断依据，`strategies` 保存每个模块的实际 `backend`、所需数据源、缺失数据源、策略状态和降级原因。缺少不可替代的数据源时，模块不会被盲目执行，而是在 `collector_status` 中标记为 `unsupported`。
+
+当前策略：
+
+- `host`：优先使用 `procfs_sysfs`，单一来源可降级采集；
+- `network`：使用 Go 标准库获取网卡/IP，存在 procfs 时补充路由；
+- `process`：要求 procfs；
+- `socket`：要求 procfs 和 proc_net，当前使用 `/proc/net` 后端，并记录相对 sock_diag 的降级原因。
+
 一个只读的 Linux 服务器资产采集 Agent。v0.2.0 采用“具体功能、具体扫描模块”的设计：主机、网络、进程和端口可独立扫描，`all` 只负责统一编排。
 
 ## 扫描模块

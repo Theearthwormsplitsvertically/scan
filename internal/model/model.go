@@ -52,6 +52,31 @@ type CapabilityReport struct {
 	Items []Capability `json:"items"`
 }
 
+// SystemProfile 是每次扫描前只读识别的 Linux 系统和数据源画像。
+type SystemProfile struct {
+	OS                  string          `json:"os"`
+	DistributionID      string          `json:"distribution_id,omitempty"`
+	DistributionVersion string          `json:"distribution_version,omitempty"`
+	DistributionName    string          `json:"distribution_name,omitempty"`
+	Kernel              string          `json:"kernel,omitempty"`
+	Architecture        string          `json:"architecture,omitempty"`
+	InitSystem          string          `json:"init_system,omitempty"`
+	CgroupVersion       string          `json:"cgroup_version,omitempty"`
+	SecurityModules     []string        `json:"security_modules"`
+	ContainerRuntimes   []string        `json:"container_runtimes"`
+	AvailableSources    map[string]bool `json:"available_sources"`
+}
+
+// CollectionStrategy 记录模块实际选择的采集后端及其降级依据。
+type CollectionStrategy struct {
+	Module          string   `json:"module"`
+	Backend         string   `json:"backend"`
+	RequiredSources []string `json:"required_sources"`
+	MissingSources  []string `json:"missing_sources"`
+	Status          Status   `json:"status"`
+	Reason          string   `json:"reason,omitempty"`
+}
+
 // DoctorReport 是 doctor 输出的轻量环境和能力报告。
 type DoctorReport struct {
 	SchemaVersion string           `json:"schema_version"`
@@ -62,6 +87,7 @@ type DoctorReport struct {
 	Architecture  string           `json:"architecture,omitempty"`
 	Root          bool             `json:"root"`
 	Capabilities  CapabilityReport `json:"capabilities"`
+	SystemProfile SystemProfile    `json:"system_profile"`
 }
 
 // Host 包含主机身份、操作系统、硬件和启动事实。
@@ -203,6 +229,7 @@ type CollectorStatus struct {
 	Objects    int       `json:"objects,omitempty"`
 	Errors     []string  `json:"errors"`
 	Fallback   string    `json:"fallback,omitempty"`
+	Backend    string    `json:"backend,omitempty"`
 }
 
 // ResourceUsage 记录 Agent 在一次扫描中的自身资源指标。
@@ -214,31 +241,43 @@ type ResourceUsage struct {
 
 // Snapshot 是 Agent 写出的完整一次性扫描文档。
 type Snapshot struct {
-	SchemaName        string             `json:"schema_name"`
-	SchemaVersion     string             `json:"schema_version"`
-	Scan              ScanMetadata       `json:"scan"`
-	Agent             AgentInfo          `json:"agent"`
-	Capabilities      CapabilityReport   `json:"capabilities"`
-	Host              Host               `json:"host"`
-	NetworkInterfaces []NetworkInterface `json:"network_interfaces"`
-	Addresses         []Address          `json:"addresses"`
-	Routes            []Route            `json:"routes"`
-	Processes         []Process          `json:"processes"`
-	Sockets           []Socket           `json:"sockets"`
-	Services          []Service          `json:"services"`
-	Packages          []Package          `json:"packages"`
-	Containers        []Container        `json:"containers"`
-	Files             []File             `json:"files"`
-	Applications      []Application      `json:"applications"`
-	Relationships     []Relationship     `json:"relationships"`
-	CollectorStatus   []CollectorStatus  `json:"collector_status"`
-	ResourceUsage     ResourceUsage      `json:"resource_usage"`
+	SchemaName        string               `json:"schema_name"`
+	SchemaVersion     string               `json:"schema_version"`
+	Scan              ScanMetadata         `json:"scan"`
+	Agent             AgentInfo            `json:"agent"`
+	Capabilities      CapabilityReport     `json:"capabilities"`
+	SystemProfile     SystemProfile        `json:"system_profile"`
+	Strategies        []CollectionStrategy `json:"strategies"`
+	Host              Host                 `json:"host"`
+	NetworkInterfaces []NetworkInterface   `json:"network_interfaces"`
+	Addresses         []Address            `json:"addresses"`
+	Routes            []Route              `json:"routes"`
+	Processes         []Process            `json:"processes"`
+	Sockets           []Socket             `json:"sockets"`
+	Services          []Service            `json:"services"`
+	Packages          []Package            `json:"packages"`
+	Containers        []Container          `json:"containers"`
+	Files             []File               `json:"files"`
+	Applications      []Application        `json:"applications"`
+	Relationships     []Relationship       `json:"relationships"`
+	CollectorStatus   []CollectorStatus    `json:"collector_status"`
+	ResourceUsage     ResourceUsage        `json:"resource_usage"`
 }
 
 // MarshalJSON 将每个集合规范化为 []，避免下游消费者收到 null。
 func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
 	normalized := snapshot
 	normalized.Capabilities.Items = ensureSlice(normalized.Capabilities.Items)
+	normalized.SystemProfile.SecurityModules = ensureSlice(normalized.SystemProfile.SecurityModules)
+	normalized.SystemProfile.ContainerRuntimes = ensureSlice(normalized.SystemProfile.ContainerRuntimes)
+	if normalized.SystemProfile.AvailableSources == nil {
+		normalized.SystemProfile.AvailableSources = map[string]bool{}
+	}
+	normalized.Strategies = ensureSlice(normalized.Strategies)
+	for index := range normalized.Strategies {
+		normalized.Strategies[index].RequiredSources = ensureSlice(normalized.Strategies[index].RequiredSources)
+		normalized.Strategies[index].MissingSources = ensureSlice(normalized.Strategies[index].MissingSources)
+	}
 	normalized.NetworkInterfaces = ensureSlice(normalized.NetworkInterfaces)
 	normalized.Addresses = ensureSlice(normalized.Addresses)
 	normalized.Routes = ensureSlice(normalized.Routes)

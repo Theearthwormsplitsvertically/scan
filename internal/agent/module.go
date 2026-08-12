@@ -37,32 +37,50 @@ func (local *LocalRuntime) ScanModule(ctx context.Context, module Module) (model
 	var memoryBefore runtime.MemStats
 	runtime.ReadMemStats(&memoryBefore)
 	report := newModuleReport(module, started)
+	doctor, doctorStatus := invokeDoctor(ctx, local.dependencies.Doctor)
+	doctorStatus.Backend = "system_profile"
+	report.SystemProfile = doctor.SystemProfile
+	strategy := selectStrategy(module, report.SystemProfile)
+	report.Strategies = []model.CollectionStrategy{strategy}
+	report.CollectorStatus = append(report.CollectorStatus, doctorStatus)
+
+	if !canExecuteStrategy(strategy) {
+		report.CollectorStatus = append(report.CollectorStatus, skippedCollectorStatus(module, strategy))
+		finishModuleReport(&report, started, memoryBefore)
+		return report, nil
+	}
 
 	switch module {
 	case ModuleHost:
 		hostResult, status := invokeHost(ctx, local.dependencies.Host)
 		report.Data.Host = &hostResult
-		report.CollectorStatus = append(report.CollectorStatus, status)
+		report.CollectorStatus = append(report.CollectorStatus, applyStrategyEvidence(status, strategy))
 	case ModuleNetwork:
 		interfaces, addresses, routes, status := invokeNetwork(ctx, local.dependencies.Network)
 		report.Data.NetworkInterfaces = nonNil(interfaces)
 		report.Data.Addresses = nonNil(addresses)
 		report.Data.Routes = nonNil(routes)
-		report.CollectorStatus = append(report.CollectorStatus, status)
+		report.CollectorStatus = append(report.CollectorStatus, applyStrategyEvidence(status, strategy))
 	case ModuleProcess:
 		hostResult, hostStatus := invokeHost(ctx, local.dependencies.Host)
 		processes, processStatus := invokeProcesses(ctx, local.dependencies.Processes, hostResult.BootID)
 		report.Data.Processes = nonNil(processes)
-		report.CollectorStatus = append(report.CollectorStatus, hostStatus, processStatus)
+		report.CollectorStatus = append(report.CollectorStatus, hostStatus, applyStrategyEvidence(processStatus, strategy))
 	case ModuleSocket:
 		hostResult, hostStatus := invokeHost(ctx, local.dependencies.Host)
 		processes, processStatus := invokeProcesses(ctx, local.dependencies.Processes, hostResult.BootID)
 		sockets, relationships, socketStatus := invokeSockets(ctx, local.dependencies.Sockets, processes)
 		report.Data.Sockets = nonNil(sockets)
 		report.Data.Relationships = nonNil(relationships)
-		report.CollectorStatus = append(report.CollectorStatus, hostStatus, processStatus, socketStatus)
+		report.CollectorStatus = append(report.CollectorStatus, hostStatus, processStatus, applyStrategyEvidence(socketStatus, strategy))
 	}
 
+	finishModuleReport(&report, started, memoryBefore)
+	return report, nil
+}
+
+// finishModuleReport 统一完成扫描计时和 Agent 自身内存用量记录。
+func finishModuleReport(report *model.ModuleReport, started time.Time, memoryBefore runtime.MemStats) {
 	finished := time.Now().UTC()
 	var memoryAfter runtime.MemStats
 	runtime.ReadMemStats(&memoryAfter)
@@ -73,7 +91,6 @@ func (local *LocalRuntime) ScanModule(ctx context.Context, module Module) (model
 		HeapAllocBytes: memoryAfter.HeapAlloc,
 		HeapDeltaBytes: int64(memoryAfter.HeapAlloc) - int64(memoryBefore.HeapAlloc),
 	}
-	return report, nil
 }
 
 func newModuleReport(module Module, started time.Time) model.ModuleReport {
@@ -83,6 +100,7 @@ func newModuleReport(module Module, started time.Time) model.ModuleReport {
 		Module:          string(module),
 		Scan:            model.ScanMetadata{ID: fmt.Sprintf("scan-%d", started.UnixNano()), Type: "module", StartedAt: started},
 		Agent:           model.AgentInfo{Name: "asset-agent", Version: buildinfo.Version, Commit: buildinfo.Commit, BuildTime: buildinfo.BuildTime},
+		Strategies:      []model.CollectionStrategy{},
 		CollectorStatus: []model.CollectorStatus{},
 	}
 }

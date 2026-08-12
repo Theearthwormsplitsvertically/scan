@@ -59,18 +59,54 @@ func (local *LocalRuntime) Scan(ctx context.Context) (model.Snapshot, error) {
 
 	snapshot := newSnapshot(started)
 	doctor, doctorStatus := invokeDoctor(ctx, local.dependencies.Doctor)
+	doctorStatus.Backend = "system_profile"
 	snapshot.Capabilities = nonNilCapabilities(doctor.Capabilities)
-	hostResult, hostStatus := invokeHost(ctx, local.dependencies.Host)
-	snapshot.Host = hostResult
-	networkInterfaces, addresses, routes, networkStatus := invokeNetwork(ctx, local.dependencies.Network)
-	snapshot.NetworkInterfaces = nonNil(networkInterfaces)
-	snapshot.Addresses = nonNil(addresses)
-	snapshot.Routes = nonNil(routes)
-	processes, processStatus := invokeProcesses(ctx, local.dependencies.Processes, hostResult.BootID)
-	snapshot.Processes = nonNil(processes)
-	sockets, relationships, socketStatus := invokeSockets(ctx, local.dependencies.Sockets, snapshot.Processes)
-	snapshot.Sockets = nonNil(sockets)
-	snapshot.Relationships = nonNil(relationships)
+	snapshot.SystemProfile = doctor.SystemProfile
+	hostStrategy := selectStrategy(ModuleHost, snapshot.SystemProfile)
+	networkStrategy := selectStrategy(ModuleNetwork, snapshot.SystemProfile)
+	processStrategy := selectStrategy(ModuleProcess, snapshot.SystemProfile)
+	socketStrategy := selectStrategy(ModuleSocket, snapshot.SystemProfile)
+	snapshot.Strategies = []model.CollectionStrategy{hostStrategy, networkStrategy, processStrategy, socketStrategy}
+
+	var hostResult model.Host
+	var hostStatus model.CollectorStatus
+	if canExecuteStrategy(hostStrategy) {
+		hostResult, hostStatus = invokeHost(ctx, local.dependencies.Host)
+		hostStatus = applyStrategyEvidence(hostStatus, hostStrategy)
+		snapshot.Host = hostResult
+	} else {
+		hostStatus = skippedCollectorStatus(ModuleHost, hostStrategy)
+	}
+
+	var networkStatus model.CollectorStatus
+	if canExecuteStrategy(networkStrategy) {
+		networkInterfaces, addresses, routes, status := invokeNetwork(ctx, local.dependencies.Network)
+		snapshot.NetworkInterfaces = nonNil(networkInterfaces)
+		snapshot.Addresses = nonNil(addresses)
+		snapshot.Routes = nonNil(routes)
+		networkStatus = applyStrategyEvidence(status, networkStrategy)
+	} else {
+		networkStatus = skippedCollectorStatus(ModuleNetwork, networkStrategy)
+	}
+
+	var processStatus model.CollectorStatus
+	if canExecuteStrategy(processStrategy) {
+		processes, status := invokeProcesses(ctx, local.dependencies.Processes, hostResult.BootID)
+		snapshot.Processes = nonNil(processes)
+		processStatus = applyStrategyEvidence(status, processStrategy)
+	} else {
+		processStatus = skippedCollectorStatus(ModuleProcess, processStrategy)
+	}
+
+	var socketStatus model.CollectorStatus
+	if canExecuteStrategy(socketStrategy) {
+		sockets, relationships, status := invokeSockets(ctx, local.dependencies.Sockets, snapshot.Processes)
+		snapshot.Sockets = nonNil(sockets)
+		snapshot.Relationships = nonNil(relationships)
+		socketStatus = applyStrategyEvidence(status, socketStrategy)
+	} else {
+		socketStatus = skippedCollectorStatus(ModuleSocket, socketStrategy)
+	}
 	snapshot.CollectorStatus = []model.CollectorStatus{doctorStatus, hostStatus, networkStatus, processStatus, socketStatus}
 
 	finished := time.Now().UTC()
@@ -94,6 +130,8 @@ func newSnapshot(started time.Time) model.Snapshot {
 		Scan:              model.ScanMetadata{ID: fmt.Sprintf("scan-%d", started.UnixNano()), Type: "full", StartedAt: started},
 		Agent:             model.AgentInfo{Name: "asset-agent", Version: buildinfo.Version, Commit: buildinfo.Commit, BuildTime: buildinfo.BuildTime},
 		Capabilities:      model.CapabilityReport{Items: []model.Capability{}},
+		SystemProfile:     model.SystemProfile{SecurityModules: []string{}, ContainerRuntimes: []string{}, AvailableSources: map[string]bool{}},
+		Strategies:        []model.CollectionStrategy{},
 		NetworkInterfaces: []model.NetworkInterface{}, Addresses: []model.Address{}, Routes: []model.Route{}, Processes: []model.Process{}, Sockets: []model.Socket{},
 		Services: []model.Service{}, Packages: []model.Package{}, Containers: []model.Container{}, Files: []model.File{}, Applications: []model.Application{},
 		Relationships: []model.Relationship{}, CollectorStatus: []model.CollectorStatus{},

@@ -22,20 +22,32 @@ type ModuleData struct {
 
 // ModuleReport 是单个资产扫描模块的统一 JSON 信封。
 type ModuleReport struct {
-	SchemaName      string            `json:"schema_name"`
-	SchemaVersion   string            `json:"schema_version"`
-	Module          string            `json:"module"`
-	Scan            ScanMetadata      `json:"scan"`
-	Agent           AgentInfo         `json:"agent"`
-	Data            ModuleData        `json:"data"`
-	CollectorStatus []CollectorStatus `json:"collector_status"`
-	ResourceUsage   ResourceUsage     `json:"resource_usage"`
+	SchemaName      string               `json:"schema_name"`
+	SchemaVersion   string               `json:"schema_version"`
+	Module          string               `json:"module"`
+	Scan            ScanMetadata         `json:"scan"`
+	Agent           AgentInfo            `json:"agent"`
+	SystemProfile   SystemProfile        `json:"system_profile"`
+	Strategies      []CollectionStrategy `json:"strategies"`
+	Data            ModuleData           `json:"data"`
+	CollectorStatus []CollectorStatus    `json:"collector_status"`
+	ResourceUsage   ResourceUsage        `json:"resource_usage"`
 }
 
 // MarshalJSON 保证被选模块的集合字段输出 [] 而不是 null。
 func (report ModuleReport) MarshalJSON() ([]byte, error) {
 	normalized := report
 	normalized.CollectorStatus = ensureSlice(normalized.CollectorStatus)
+	normalized.SystemProfile.SecurityModules = ensureSlice(normalized.SystemProfile.SecurityModules)
+	normalized.SystemProfile.ContainerRuntimes = ensureSlice(normalized.SystemProfile.ContainerRuntimes)
+	if normalized.SystemProfile.AvailableSources == nil {
+		normalized.SystemProfile.AvailableSources = map[string]bool{}
+	}
+	normalized.Strategies = ensureSlice(normalized.Strategies)
+	for index := range normalized.Strategies {
+		normalized.Strategies[index].RequiredSources = ensureSlice(normalized.Strategies[index].RequiredSources)
+		normalized.Strategies[index].MissingSources = ensureSlice(normalized.Strategies[index].MissingSources)
+	}
 	data := map[string]any{}
 	switch normalized.Module {
 	case "host":
@@ -61,18 +73,20 @@ func (report ModuleReport) MarshalJSON() ([]byte, error) {
 		data["relationships"] = ensureSlice(normalized.Data.Relationships)
 	}
 	type envelope struct {
-		SchemaName      string            `json:"schema_name"`
-		SchemaVersion   string            `json:"schema_version"`
-		Module          string            `json:"module"`
-		Scan            ScanMetadata      `json:"scan"`
-		Agent           AgentInfo         `json:"agent"`
-		Data            map[string]any    `json:"data"`
-		CollectorStatus []CollectorStatus `json:"collector_status"`
-		ResourceUsage   ResourceUsage     `json:"resource_usage"`
+		SchemaName      string               `json:"schema_name"`
+		SchemaVersion   string               `json:"schema_version"`
+		Module          string               `json:"module"`
+		Scan            ScanMetadata         `json:"scan"`
+		Agent           AgentInfo            `json:"agent"`
+		SystemProfile   SystemProfile        `json:"system_profile"`
+		Strategies      []CollectionStrategy `json:"strategies"`
+		Data            map[string]any       `json:"data"`
+		CollectorStatus []CollectorStatus    `json:"collector_status"`
+		ResourceUsage   ResourceUsage        `json:"resource_usage"`
 	}
 	return json.Marshal(envelope{
 		SchemaName: normalized.SchemaName, SchemaVersion: normalized.SchemaVersion, Module: normalized.Module,
-		Scan: normalized.Scan, Agent: normalized.Agent, Data: data,
+		Scan: normalized.Scan, Agent: normalized.Agent, SystemProfile: normalized.SystemProfile, Strategies: normalized.Strategies, Data: data,
 		CollectorStatus: normalized.CollectorStatus, ResourceUsage: normalized.ResourceUsage,
 	})
 }
