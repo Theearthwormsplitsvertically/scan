@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const SchemaVersion = "1.0"
 
@@ -205,4 +208,44 @@ type Snapshot struct {
 	Relationships     []Relationship     `json:"relationships"`
 	CollectorStatus   []CollectorStatus  `json:"collector_status"`
 	ResourceUsage     ResourceUsage      `json:"resource_usage"`
+}
+
+func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
+	normalized := snapshot
+	normalized.Capabilities.Items = ensureSlice(normalized.Capabilities.Items)
+	normalized.NetworkInterfaces = ensureSlice(normalized.NetworkInterfaces)
+	normalized.Addresses = ensureSlice(normalized.Addresses)
+	normalized.Routes = ensureSlice(normalized.Routes)
+	normalized.Processes = ensureSlice(normalized.Processes)
+	normalized.Sockets = ensureSlice(normalized.Sockets)
+	normalized.Services = ensureSlice(normalized.Services)
+	normalized.Packages = ensureSlice(normalized.Packages)
+	normalized.Containers = ensureSlice(normalized.Containers)
+	normalized.Files = ensureSlice(normalized.Files)
+	normalized.Applications = ensureSlice(normalized.Applications)
+	normalized.Relationships = ensureSlice(normalized.Relationships)
+	normalized.CollectorStatus = ensureSlice(normalized.CollectorStatus)
+	for index := range normalized.NetworkInterfaces {
+		normalized.NetworkInterfaces[index].Flags = ensureSlice(normalized.NetworkInterfaces[index].Flags)
+	}
+	for index := range normalized.Processes {
+		normalized.Processes[index].CommandLine = ensureSlice(normalized.Processes[index].CommandLine)
+		normalized.Processes[index].Cgroups = ensureSlice(normalized.Processes[index].Cgroups)
+	}
+	for index := range normalized.Sockets {
+		normalized.Sockets[index].PIDs = ensureSlice(normalized.Sockets[index].PIDs)
+		normalized.Sockets[index].ProcessIDs = ensureSlice(normalized.Sockets[index].ProcessIDs)
+	}
+	for index := range normalized.CollectorStatus {
+		normalized.CollectorStatus[index].Errors = ensureSlice(normalized.CollectorStatus[index].Errors)
+	}
+	type snapshotAlias Snapshot
+	return json.Marshal(snapshotAlias(normalized))
+}
+
+func ensureSlice[T any](items []T) []T {
+	if items == nil {
+		return []T{}
+	}
+	return items
 }

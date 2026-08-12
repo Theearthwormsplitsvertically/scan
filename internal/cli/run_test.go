@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -220,5 +221,28 @@ func TestRunScanRejectsUnknownOption(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "unknown scan option") {
 		t.Fatalf("stderr = %q, want unknown option error", stderr.String())
+	}
+}
+
+func TestRunScanSerializesAllCollectionsAsArrays(t *testing.T) {
+	t.Parallel()
+
+	runtime := fakeRuntime{snapshot: model.Snapshot{SchemaVersion: model.SchemaVersion}}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"scan"}, &stdout, &stderr, runtime)
+
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr = %q", code, stderr.String())
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	for _, field := range []string{"network_interfaces", "addresses", "routes", "processes", "sockets", "services", "packages", "containers", "files", "applications", "relationships", "collector_status"} {
+		if got := string(document[field]); got != "[]" {
+			t.Fatalf("%s = %s, want []", field, got)
+		}
 	}
 }
