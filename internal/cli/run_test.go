@@ -57,7 +57,7 @@ func TestRunDynamicModuleFlagsAndFullScan(t *testing.T) {
 				batch.Type, batch.RequestedModule = model.BatchTypeSnapshot, "all"
 			}
 			var stdout, stderr bytes.Buffer
-			env := environment{executablePath: func() (string, error) { return filepath.Join(t.TempDir(), "agent"), nil }, now: time.Now}
+			env := environment{defaultOutputRoot: func() (string, error) { return filepath.Join(t.TempDir(), "output"), nil }}
 			args := append(append([]string{}, test.args...), "-output", root)
 			code := runWithEnvironment(context.Background(), args, &stdout, &stderr, fakeRuntime{
 				infos:   []coremodule.Info{moduleInfo("custom"), moduleInfo("host"), moduleInfo("network")},

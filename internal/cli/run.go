@@ -77,9 +77,7 @@ func runWithEnvironment(ctx context.Context, args []string, stdout, stderr io.Wr
 		fmt.Fprintf(stderr, "扫描失败: %v\n", err)
 		return 1
 	}
-	target := outcome.Batch.RequestedModule
-	options := scanOptions{outputDir: invocation.outputRoot, explicitDir: invocation.outputRoot != ""}
-	if err := writeScanResult(stdout, outcome.Batch, target, options, env); err != nil {
+	if err := writeScanResult(stdout, outcome, invocation.selected, invocation.outputRoot, env); err != nil {
 		fmt.Fprintf(stderr, "写入扫描结果: %v\n", err)
 		return 1
 	}
