@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+var reservedModuleNames = map[string]struct{}{
+	"all": {}, "output": {}, "help": {}, "version": {},
+	"doctor": {}, "modules": {}, "scan": {},
+}
+
 // Registry 按模块自己的描述符动态保存模块。
 type Registry struct {
 	modules map[string]Module
@@ -32,7 +37,7 @@ func (registry *Registry) Register(item Module) error {
 	if name != descriptor.Name {
 		return fmt.Errorf("module name %q contains surrounding whitespace", descriptor.Name)
 	}
-	if name == "all" {
+	if _, reserved := reservedModuleNames[name]; reserved {
 		return fmt.Errorf("module name %q is reserved", name)
 	}
 	if registry.modules == nil {
@@ -71,25 +76,39 @@ func (registry *Registry) List() []Descriptor {
 	return descriptors
 }
 
-// Plan 计算硬依赖闭包，并返回依赖优先、同层名称有序的执行计划。
-func (registry *Registry) Plan(target string) ([]Module, error) {
+// PlanSelected 合并多个目标的硬依赖闭包，并返回依赖优先、同层名称有序的执行计划。
+func (registry *Registry) PlanSelected(names []string) ([]Module, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("module registry is nil")
 	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("no modules selected")
+	}
 	selected := make(map[string]bool)
-	if target == "all" {
-		for name := range registry.modules {
-			selected[name] = true
+	for _, name := range names {
+		if _, ok := registry.modules[name]; !ok {
+			return nil, fmt.Errorf("module %q is not registered", name)
 		}
-	} else {
-		if _, ok := registry.modules[target]; !ok {
-			return nil, fmt.Errorf("module %q is not registered", target)
-		}
-		if err := registry.selectHardDependencies(target, selected); err != nil {
+		if err := registry.selectHardDependencies(name, selected); err != nil {
 			return nil, err
 		}
 	}
+	return registry.plan(selected)
+}
 
+// PlanAll 返回当前注册表全部模块的动态执行计划。
+func (registry *Registry) PlanAll() ([]Module, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("module registry is nil")
+	}
+	selected := make(map[string]bool, len(registry.modules))
+	for name := range registry.modules {
+		selected[name] = true
+	}
+	return registry.plan(selected)
+}
+
+func (registry *Registry) plan(selected map[string]bool) ([]Module, error) {
 	indegree := make(map[string]int, len(selected))
 	dependents := make(map[string][]string, len(selected))
 	for name := range selected {
