@@ -8,7 +8,7 @@
 
 | 模块 | 当前采集内容 | 默认完整校准周期 | 依赖 |
 |---|---|---:|---|
-| `host` | 主机身份、发行版、内核、CPU、内存、Machine ID、Boot ID、DMI | 24 小时 | 无 |
+| `host` | 主机名、发行版、内核、架构、内存总量、Boot ID、DMI UUID | 24 小时 | 无 |
 | `network` | 网卡、MAC、IP 地址、IPv4 路由、DNS 配置摘要 | 6 小时 | `host` |
 | `process` | PID、父进程、启动时钟、可执行文件、脱敏命令行、Cgroup、Namespace | 12 小时 | `host` |
 | `port` | TCP 监听端口、UDP 本地端口、进程归属 | 1 小时 | `process` |
@@ -16,6 +16,9 @@
 | `all` | 动态编排全部已注册模块；它是虚拟目标，不是扫描模块 | 由外部调度决定 | 全部已注册模块 |
 
 每个真实模块都有独立命令、描述、支持状态和周期信息：
+
+`host` 只保存主机身份、操作系统基线和内存总容量，不采集 CPU 型号、CPU 数量、硬件厂商或机器型号。CPU、内存、Load 和 Swap 的当前使用情况由后续 `resource` 模块按 10 分钟周期提供。
+DMI UUID 是强稳定身份来源，存在时用于生成稳定主机 ID；Boot ID 只表示当前启动实例，不参与稳定身份。DMI UUID 缺失但 hostname 存在时使用 hostname 推断身份，结果为 `partial`、`inferred` 且非权威。
 
 ```bash
 ./asset-agent modules

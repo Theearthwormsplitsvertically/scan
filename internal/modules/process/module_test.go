@@ -34,7 +34,7 @@ func TestProcessModuleUsesHostBootIDAndPublishesOnlyProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := coremodule.Request{Dependencies: map[string]coremodule.Result{
-		"host": {Internal: model.Host{ID: "machine:dmi", BootID: "boot-1"}},
+		"host": {Internal: model.Host{DMIUUID: "dmi", BootID: "boot-1"}},
 	}}
 	result := New().Collect(context.Background(), providers, request)
 	if seenBootID != "boot-1" {

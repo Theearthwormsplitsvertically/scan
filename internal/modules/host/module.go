@@ -52,32 +52,47 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 		return coremodule.Result{Data: coremodule.NewModuleResult("host", status, []string{"host"}, []model.AssetRecord{}, []model.RelationshipRecord{})}
 	}
 	host, status := backend.Collect(ctx)
+	rawDMIUUID := strings.TrimSpace(host.DMIUUID)
+	host.DMIUUID = normalizeDMIUUID(rawDMIUUID)
+	if rawDMIUUID != "" && host.DMIUUID == "" {
+		status.Errors = append(status.Errors, "invalid DMI UUID; treated as missing")
+	}
 	recordID := RecordID(host)
+	confidence := identityConfidence(host)
+	if recordID == "" {
+		status.Status = model.StatusFailed
+		status.Errors = append(status.Errors, "无法建立主机身份")
+		data := coremodule.NewModuleResult(
+			"host", status, []string{"host"},
+			[]model.AssetRecord{}, []model.RelationshipRecord{},
+		)
+		return coremodule.Result{Data: data, Internal: host}
+	}
+	if confidence == "inferred" && (status.Status == model.StatusOK || status.Status == model.StatusComplete) {
+		status.Status = model.StatusPartial
+		status.Errors = append(status.Errors, "仅能使用 hostname 推断主机身份")
+	}
 	observedAt := time.Now().UTC()
 	name := strings.TrimSpace(host.Hostname)
 	if name == "" {
-		name = strings.TrimSpace(host.ID)
-	}
-	if name == "" {
-		name = "unknown-host"
-	}
-	confidence := "exact"
-	if strings.TrimSpace(host.ID) == "" {
-		confidence = "inferred"
+		name = recordID
 	}
 	record := model.AssetRecord{
 		RecordID: recordID, RecordType: "host", HostID: recordID,
 		ScopeID: recordID, ScopeType: "host", Name: name,
-		Version: host.OSVersion, Vendor: host.Vendor, Platform: providers.Platform(),
+		Platform:      providers.Platform(),
 		States:        model.AssetStates{Installed: true, Running: true, Loaded: true},
 		FirstObserved: observedAt, LastObserved: observedAt, Confidence: confidence,
 		Attributes: map[string]any{
-			"id": host.ID, "hostname": host.Hostname, "distribution": host.Distribution,
-			"distribution_id": host.DistributionID, "os_version": host.OSVersion,
-			"kernel": host.Kernel, "architecture": host.Architecture,
-			"machine_id": host.MachineID, "boot_id": host.BootID, "dmi_uuid": host.DMIUUID,
-			"vendor": host.Vendor, "model": host.Model, "cpu_model": host.CPUModel,
-			"cpu_count": host.CPUCount, "memory_bytes": host.MemoryBytes,
+			"hostname":             host.Hostname,
+			"distribution_name":    host.DistributionName,
+			"distribution_id":      host.DistributionID,
+			"distribution_version": host.DistributionVersion,
+			"kernel_release":       host.KernelRelease,
+			"architecture":         host.Architecture,
+			"memory_total_bytes":   host.MemoryTotalBytes,
+			"boot_id":              host.BootID,
+			"dmi_uuid":             host.DMIUUID,
 		},
 		Evidence: []model.Evidence{{
 			Provider: provider.CapabilityHost, SourceType: "provider",
@@ -90,8 +105,52 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 
 // RecordID 根据现有稳定主机身份或允许的回退字段生成确定性 ID。
 func RecordID(host model.Host) string {
-	if identity := strings.TrimSpace(host.ID); identity != "" {
-		return coremodule.StableRecordID("host", identity)
+	dmiUUID := normalizeDMIUUID(host.DMIUUID)
+	if dmiUUID != "" {
+		return coremodule.StableRecordID("host", dmiUUID)
 	}
-	return coremodule.StableRecordID("host", host.MachineID, host.DMIUUID, host.Hostname)
+	if hostname := strings.TrimSpace(host.Hostname); hostname != "" {
+		return coremodule.StableRecordID("host", "", "", hostname)
+	}
+	return ""
+}
+
+func identityConfidence(host model.Host) string {
+	dmi := normalizeDMIUUID(host.DMIUUID) != ""
+	switch {
+	case dmi:
+		return "strong"
+	case strings.TrimSpace(host.Hostname) != "":
+		return "inferred"
+	default:
+		return ""
+	}
+}
+
+func normalizeDMIUUID(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) != 36 {
+		return ""
+	}
+	for index := 0; index < len(value); index++ {
+		character := value[index]
+		switch index {
+		case 8, 13, 18, 23:
+			if character != '-' {
+				return ""
+			}
+		default:
+			if !((character >= '0' && character <= '9') ||
+				(character >= 'a' && character <= 'f') ||
+				(character >= 'A' && character <= 'F')) {
+				return ""
+			}
+		}
+	}
+	normalized := strings.ToLower(value)
+	if normalized == "00000000-0000-0000-0000-000000000000" ||
+		normalized == "ffffffff-ffff-ffff-ffff-ffffffffffff" {
+		return ""
+	}
+	return normalized
 }

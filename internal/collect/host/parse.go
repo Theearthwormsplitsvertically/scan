@@ -1,4 +1,4 @@
-// host 包采集主机身份、操作系统、CPU 和内存事实。
+// host 包采集主机身份、操作系统和内存容量事实。
 package host
 
 import (
@@ -26,27 +26,4 @@ func ParseMemoryBytes(data []byte) uint64 {
 		return value
 	}
 	return 0
-}
-
-// ParseCPUModel 返回 /proc/cpuinfo 中第一个有效的 x86 或 ARM 型号描述。
-func ParseCPUModel(data []byte) string {
-	values := make(map[string]string)
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		key, value, found := strings.Cut(scanner.Text(), ":")
-		if !found {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		if _, exists := values[key]; !exists {
-			values[key] = strings.TrimSpace(value)
-		}
-	}
-	if values["Hardware"] != "" {
-		return values["Hardware"]
-	}
-	if values["model name"] != "" {
-		return values["model name"]
-	}
-	return values["Processor"]
 }

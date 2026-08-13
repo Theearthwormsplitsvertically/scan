@@ -1,5 +1,8 @@
 # Host Minimal Fields Implementation Plan
 
+> [!WARNING]
+> **本文已被取代。** 正文保留的是包含 `machine_id` 的历史十字段方案，仅供追溯；当前九字段契约与实施要求以[新设计](../specs/2026-08-13-host-machine-id-removal-design.md)和[新计划](./2026-08-13-remove-host-machine-id.md)为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 `host` 模块收敛为十个批准字段，删除无用硬件采集，并用明确的身份降级规则阻止无身份主机记录污染 CMDB。

@@ -93,21 +93,15 @@ type DoctorReport struct {
 
 // Host 包含主机身份、操作系统、硬件和启动事实。
 type Host struct {
-	ID             string `json:"id,omitempty"`
-	Hostname       string `json:"hostname,omitempty"`
-	Distribution   string `json:"distribution,omitempty"`
-	DistributionID string `json:"distribution_id,omitempty"`
-	OSVersion      string `json:"os_version,omitempty"`
-	Kernel         string `json:"kernel,omitempty"`
-	Architecture   string `json:"architecture,omitempty"`
-	MachineID      string `json:"machine_id,omitempty"`
-	BootID         string `json:"boot_id,omitempty"`
-	DMIUUID        string `json:"dmi_uuid,omitempty"`
-	Vendor         string `json:"vendor,omitempty"`
-	Model          string `json:"model,omitempty"`
-	CPUModel       string `json:"cpu_model,omitempty"`
-	CPUCount       int    `json:"cpu_count,omitempty"`
-	MemoryBytes    uint64 `json:"memory_bytes,omitempty"`
+	Hostname            string `json:"hostname,omitempty"`
+	DistributionName    string `json:"distribution_name,omitempty"`
+	DistributionID      string `json:"distribution_id,omitempty"`
+	DistributionVersion string `json:"distribution_version,omitempty"`
+	KernelRelease       string `json:"kernel_release,omitempty"`
+	Architecture        string `json:"architecture,omitempty"`
+	BootID              string `json:"boot_id,omitempty"`
+	DMIUUID             string `json:"dmi_uuid,omitempty"`
+	MemoryTotalBytes    uint64 `json:"memory_total_bytes,omitempty"`
 }
 
 // NetworkInterface 表示一个操作系统网络接口。
