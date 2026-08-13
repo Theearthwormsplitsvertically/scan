@@ -108,14 +108,6 @@ func (registry *Registry) PlanAll() ([]Module, error) {
 	return registry.plan(selected)
 }
 
-// Plan 保留现有内部调用，新的多目标调用应使用 PlanSelected 或 PlanAll。
-func (registry *Registry) Plan(target string) ([]Module, error) {
-	if target == "all" {
-		return registry.PlanAll()
-	}
-	return registry.PlanSelected([]string{target})
-}
-
 func (registry *Registry) plan(selected map[string]bool) ([]Module, error) {
 	indegree := make(map[string]int, len(selected))
 	dependents := make(map[string][]string, len(selected))

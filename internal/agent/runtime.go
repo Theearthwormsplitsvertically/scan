@@ -25,5 +25,4 @@ type Runtime interface {
 	Doctor(context.Context) (model.DoctorReport, error)
 	Modules(context.Context) ([]coremodule.Info, error)
 	Scan(context.Context, ScanSelection) (ScanOutcome, error)
-	ScanTarget(context.Context, string) (model.Batch, error)
 }

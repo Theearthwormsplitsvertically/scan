@@ -159,16 +159,6 @@ func (scanner *Scanner) Scan(ctx context.Context, selection ScanSelection) (Scan
 	return ScanOutcome{Batch: batch, RecordCounts: recordCounts}, nil
 }
 
-// ScanTarget 保留旧 CLI 迁移期间的单目标内部适配；新调用使用 Scan。
-func (scanner *Scanner) ScanTarget(ctx context.Context, target string) (model.Batch, error) {
-	selection := ScanSelection{Modules: []string{target}}
-	if target == "all" {
-		selection = ScanSelection{All: true}
-	}
-	outcome, err := scanner.Scan(ctx, selection)
-	return outcome.Batch, err
-}
-
 func dependencyResults(descriptor coremodule.Descriptor, executed map[string]coremodule.Result) map[string]coremodule.Result {
 	result := make(map[string]coremodule.Result)
 	for _, name := range append(append([]string{}, descriptor.HardDependencies...), descriptor.SoftDependencies...) {
