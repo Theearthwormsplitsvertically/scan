@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
@@ -53,8 +54,108 @@ func minimalHost() model.Host {
 		Hostname: "server-1", DistributionName: "Example Linux 1",
 		DistributionID: "example", DistributionVersion: "1",
 		KernelRelease: "6.8.0-test", Architecture: "amd64",
-		MemoryTotalBytes: 2_097_152, BootID: "boot-1", DMIUUID: "dmi",
+		MemoryTotalBytes: 2_097_152, BootID: "boot-1", DMIUUID: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 	}
+}
+
+func TestHostModuleNormalizesCanonicalDMIUUIDAcrossIdentityOutputs(t *testing.T) {
+	const canonical = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+	upper := minimalHost()
+	upper.DMIUUID = "  6BA7B810-9DAD-11D1-80B4-00C04FD430C8\t"
+	lower := minimalHost()
+	lower.DMIUUID = canonical
+
+	upperResult := collectHostForTest(t, upper, model.StatusOK)
+	lowerResult := collectHostForTest(t, lower, model.StatusOK)
+	if len(upperResult.Data.Records) != 1 || len(lowerResult.Data.Records) != 1 {
+		t.Fatalf("records: upper=%+v lower=%+v", upperResult.Data.Records, lowerResult.Data.Records)
+	}
+	upperRecord := upperResult.Data.Records[0]
+	lowerRecord := lowerResult.Data.Records[0]
+	if upperRecord.RecordID != lowerRecord.RecordID {
+		t.Fatalf("equivalent DMI UUID IDs differ: upper=%q lower=%q", upperRecord.RecordID, lowerRecord.RecordID)
+	}
+	if got := upperRecord.Attributes["dmi_uuid"]; got != canonical {
+		t.Fatalf("published dmi_uuid = %#v, want %q", got, canonical)
+	}
+	internal, ok := upperResult.Internal.(model.Host)
+	if !ok || internal.DMIUUID != canonical {
+		t.Fatalf("internal = %#v, want normalized DMI UUID %q", upperResult.Internal, canonical)
+	}
+	if upperRecord.Confidence != "strong" {
+		t.Fatalf("confidence = %q, want strong", upperRecord.Confidence)
+	}
+}
+
+func TestHostModuleRejectsPlaceholderDMIUUIDsAndFallsBackToHostname(t *testing.T) {
+	placeholders := []string{
+		"00000000-0000-0000-0000-000000000000",
+		"FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+	}
+	for _, placeholder := range placeholders {
+		t.Run(placeholder, func(t *testing.T) {
+			host := minimalHost()
+			host.DMIUUID = placeholder
+			result := collectHostForTest(t, host, model.StatusOK)
+			if result.Data.Status != model.StatusPartial || result.Data.Authoritative {
+				t.Fatalf("status = %q, authoritative = %v, errors = %+v", result.Data.Status, result.Data.Authoritative, result.Data.Errors)
+			}
+			if len(result.Data.Records) != 1 {
+				t.Fatalf("records = %+v", result.Data.Records)
+			}
+			record := result.Data.Records[0]
+			wantID := coremodule.StableRecordID("host", "", "", "server-1")
+			if record.RecordID != wantID || record.Confidence != "inferred" {
+				t.Fatalf("record identity = %+v, want ID %q and inferred confidence", record, wantID)
+			}
+			if got := record.Attributes["dmi_uuid"]; got != "" {
+				t.Fatalf("published dmi_uuid = %#v, want empty", got)
+			}
+			internal, ok := result.Internal.(model.Host)
+			if !ok || internal.DMIUUID != "" {
+				t.Fatalf("internal = %#v, want empty DMI UUID", result.Internal)
+			}
+			assertHostErrorContains(t, result, "invalid DMI UUID")
+		})
+	}
+}
+
+func TestHostModuleRejectsInvalidDMIUUIDWithoutHostname(t *testing.T) {
+	host := minimalHost()
+	host.DMIUUID = "not-a-uuid"
+	host.Hostname = ""
+
+	result := collectHostForTest(t, host, model.StatusOK)
+	if result.Data.Status != model.StatusFailed || result.Data.Authoritative {
+		t.Fatalf("status = %q, authoritative = %v", result.Data.Status, result.Data.Authoritative)
+	}
+	if len(result.Data.Records) != 0 {
+		t.Fatalf("records = %+v, want none", result.Data.Records)
+	}
+	internal, ok := result.Internal.(model.Host)
+	if !ok || internal.DMIUUID != "" {
+		t.Fatalf("internal = %#v, want empty DMI UUID", result.Internal)
+	}
+	assertHostErrorContains(t, result, "invalid DMI UUID")
+}
+
+func TestHostnameOnlyRecordIDIgnoresBootID(t *testing.T) {
+	first := RecordID(model.Host{Hostname: "server", BootID: "boot-1"})
+	second := RecordID(model.Host{Hostname: "server", BootID: "boot-2"})
+	if first == "" || second != first {
+		t.Fatalf("hostname-only record IDs = %q, %q", first, second)
+	}
+}
+
+func assertHostErrorContains(t *testing.T, result coremodule.Result, substring string) {
+	t.Helper()
+	for _, detail := range result.Data.Errors {
+		if strings.Contains(detail.Message, substring) {
+			return
+		}
+	}
+	t.Fatalf("errors = %+v, want message containing %q", result.Data.Errors, substring)
 }
 
 func TestHostModulePublishesOnlyApprovedAttributes(t *testing.T) {
@@ -199,7 +300,7 @@ func TestHostModuleDescriptorAndUnsupportedProbe(t *testing.T) {
 func TestRecordIDFallsBackDeterministically(t *testing.T) {
 	t.Parallel()
 
-	host := model.Host{DMIUUID: "dmi", Hostname: "server"}
+	host := model.Host{DMIUUID: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", Hostname: "server"}
 	first := RecordID(host)
 	second := RecordID(host)
 	if first == "" || first != second {
@@ -212,7 +313,7 @@ func TestRecordIDFallsBackDeterministically(t *testing.T) {
 		t.Fatalf("record ID changed with boot ID: %q, %q", first, got)
 	}
 	dmiChanged := host
-	dmiChanged.DMIUUID = "dmi-2"
+	dmiChanged.DMIUUID = "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
 	if got := RecordID(dmiChanged); got == first {
 		t.Fatalf("record ID did not change with DMI UUID: %q", got)
 	}

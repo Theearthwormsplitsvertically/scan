@@ -52,6 +52,11 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 		return coremodule.Result{Data: coremodule.NewModuleResult("host", status, []string{"host"}, []model.AssetRecord{}, []model.RelationshipRecord{})}
 	}
 	host, status := backend.Collect(ctx)
+	rawDMIUUID := strings.TrimSpace(host.DMIUUID)
+	host.DMIUUID = normalizeDMIUUID(rawDMIUUID)
+	if rawDMIUUID != "" && host.DMIUUID == "" {
+		status.Errors = append(status.Errors, "invalid DMI UUID; treated as missing")
+	}
 	recordID := RecordID(host)
 	confidence := identityConfidence(host)
 	if recordID == "" {
@@ -100,7 +105,7 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 
 // RecordID 根据现有稳定主机身份或允许的回退字段生成确定性 ID。
 func RecordID(host model.Host) string {
-	dmiUUID := strings.TrimSpace(host.DMIUUID)
+	dmiUUID := normalizeDMIUUID(host.DMIUUID)
 	if dmiUUID != "" {
 		return coremodule.StableRecordID("host", dmiUUID)
 	}
@@ -111,7 +116,7 @@ func RecordID(host model.Host) string {
 }
 
 func identityConfidence(host model.Host) string {
-	dmi := strings.TrimSpace(host.DMIUUID) != ""
+	dmi := normalizeDMIUUID(host.DMIUUID) != ""
 	switch {
 	case dmi:
 		return "strong"
@@ -120,4 +125,32 @@ func identityConfidence(host model.Host) string {
 	default:
 		return ""
 	}
+}
+
+func normalizeDMIUUID(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) != 36 {
+		return ""
+	}
+	for index := 0; index < len(value); index++ {
+		character := value[index]
+		switch index {
+		case 8, 13, 18, 23:
+			if character != '-' {
+				return ""
+			}
+		default:
+			if !((character >= '0' && character <= '9') ||
+				(character >= 'a' && character <= 'f') ||
+				(character >= 'A' && character <= 'F')) {
+				return ""
+			}
+		}
+	}
+	normalized := strings.ToLower(value)
+	if normalized == "00000000-0000-0000-0000-000000000000" ||
+		normalized == "ffffffff-ffff-ffff-ffff-ffffffffffff" {
+		return ""
+	}
+	return normalized
 }
