@@ -29,7 +29,7 @@ func TestNetworkModuleProducesStableUnifiedRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := coremodule.Request{Dependencies: map[string]coremodule.Result{
-		"host": {Internal: model.Host{MachineID: "machine", DMIUUID: "dmi", Hostname: "server-1"}},
+		"host": {Internal: model.Host{DMIUUID: "dmi", Hostname: "server-1"}},
 	}}
 	item := New()
 	first := item.Collect(context.Background(), providers, request)

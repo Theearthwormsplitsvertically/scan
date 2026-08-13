@@ -99,7 +99,6 @@ type Host struct {
 	DistributionVersion string `json:"distribution_version,omitempty"`
 	KernelRelease       string `json:"kernel_release,omitempty"`
 	Architecture        string `json:"architecture,omitempty"`
-	MachineID           string `json:"machine_id,omitempty"`
 	BootID              string `json:"boot_id,omitempty"`
 	DMIUUID             string `json:"dmi_uuid,omitempty"`
 	MemoryTotalBytes    uint64 `json:"memory_total_bytes,omitempty"`

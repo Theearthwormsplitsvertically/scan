@@ -63,7 +63,7 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 		)
 		return coremodule.Result{Data: data, Internal: host}
 	}
-	if confidence == "inferred" && status.Status == model.StatusOK {
+	if confidence == "inferred" && (status.Status == model.StatusOK || status.Status == model.StatusComplete) {
 		status.Status = model.StatusPartial
 		status.Errors = append(status.Errors, "仅能使用 hostname 推断主机身份")
 	}
@@ -86,7 +86,6 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 			"kernel_release":       host.KernelRelease,
 			"architecture":         host.Architecture,
 			"memory_total_bytes":   host.MemoryTotalBytes,
-			"machine_id":           host.MachineID,
 			"boot_id":              host.BootID,
 			"dmi_uuid":             host.DMIUUID,
 		},
@@ -101,10 +100,9 @@ func (Collector) Collect(ctx context.Context, providers provider.Lookup, _ corem
 
 // RecordID 根据现有稳定主机身份或允许的回退字段生成确定性 ID。
 func RecordID(host model.Host) string {
-	machineID := strings.TrimSpace(host.MachineID)
 	dmiUUID := strings.TrimSpace(host.DMIUUID)
-	if machineID != "" || dmiUUID != "" {
-		return coremodule.StableRecordID("host", machineID+":"+dmiUUID)
+	if dmiUUID != "" {
+		return coremodule.StableRecordID("host", dmiUUID)
 	}
 	if hostname := strings.TrimSpace(host.Hostname); hostname != "" {
 		return coremodule.StableRecordID("host", "", "", hostname)
@@ -113,12 +111,9 @@ func RecordID(host model.Host) string {
 }
 
 func identityConfidence(host model.Host) string {
-	machine := strings.TrimSpace(host.MachineID) != ""
 	dmi := strings.TrimSpace(host.DMIUUID) != ""
 	switch {
-	case machine && dmi:
-		return "exact"
-	case machine || dmi:
+	case dmi:
 		return "strong"
 	case strings.TrimSpace(host.Hostname) != "":
 		return "inferred"

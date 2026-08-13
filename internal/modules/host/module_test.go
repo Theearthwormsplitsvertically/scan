@@ -53,7 +53,7 @@ func minimalHost() model.Host {
 		Hostname: "server-1", DistributionName: "Example Linux 1",
 		DistributionID: "example", DistributionVersion: "1",
 		KernelRelease: "6.8.0-test", Architecture: "amd64",
-		MemoryTotalBytes: 2_097_152, MachineID: "machine", BootID: "boot-1", DMIUUID: "dmi",
+		MemoryTotalBytes: 2_097_152, BootID: "boot-1", DMIUUID: "dmi",
 	}
 }
 
@@ -65,8 +65,7 @@ func TestHostModulePublishesOnlyApprovedAttributes(t *testing.T) {
 	record := result.Data.Records[0]
 	wantKeys := []string{
 		"architecture", "boot_id", "distribution_id", "distribution_name",
-		"distribution_version", "dmi_uuid", "hostname", "kernel_release",
-		"machine_id", "memory_total_bytes",
+		"distribution_version", "dmi_uuid", "hostname", "kernel_release", "memory_total_bytes",
 	}
 	gotKeys := make([]string, 0, len(record.Attributes))
 	for key := range record.Attributes {
@@ -82,16 +81,10 @@ func TestHostModulePublishesOnlyApprovedAttributes(t *testing.T) {
 }
 
 func TestHostModuleIdentityConfidence(t *testing.T) {
-	both := minimalHost()
-	machineOnly := minimalHost()
-	machineOnly.DMIUUID = ""
 	dmiOnly := minimalHost()
-	dmiOnly.MachineID = ""
 	hostnameFallback := minimalHost()
-	hostnameFallback.MachineID = ""
 	hostnameFallback.DMIUUID = ""
 	noIdentity := minimalHost()
-	noIdentity.MachineID = ""
 	noIdentity.DMIUUID = ""
 	noIdentity.Hostname = ""
 
@@ -102,8 +95,6 @@ func TestHostModuleIdentityConfidence(t *testing.T) {
 		status     model.Status
 		records    int
 	}{
-		{"machine and dmi", both, "exact", model.StatusComplete, 1},
-		{"machine only", machineOnly, "strong", model.StatusComplete, 1},
 		{"dmi only", dmiOnly, "strong", model.StatusComplete, 1},
 		{"hostname fallback", hostnameFallback, "inferred", model.StatusPartial, 1},
 		{"no identity", noIdentity, "", model.StatusFailed, 0},
@@ -124,11 +115,40 @@ func TestHostModuleIdentityConfidence(t *testing.T) {
 	}
 }
 
+func TestHostModuleDowngradesHostnameFallbackFromSuccessfulProviderStatuses(t *testing.T) {
+	host := minimalHost()
+	host.DMIUUID = ""
+
+	for _, upstreamStatus := range []model.Status{model.StatusOK, model.StatusComplete} {
+		t.Run(string(upstreamStatus), func(t *testing.T) {
+			result := collectHostForTest(t, host, upstreamStatus)
+			if result.Data.Status != model.StatusPartial || result.Data.Authoritative {
+				t.Fatalf("result = %+v", result.Data)
+			}
+		})
+	}
+}
+
+func TestHostModuleExposesPartialProviderErrors(t *testing.T) {
+	result := collectHostWithStatusForTest(t, minimalHost(), model.CollectorStatus{
+		Collector: "host", Status: model.StatusPartial, Errors: []string{"/proc/meminfo: missing or invalid MemTotal"},
+	})
+	if result.Data.Status != model.StatusPartial || result.Data.Authoritative {
+		t.Fatalf("result = %+v", result.Data)
+	}
+	want := []model.ErrorDetail{{
+		Code: "collection_error", Message: "/proc/meminfo: missing or invalid MemTotal", Provider: "host",
+	}}
+	if !reflect.DeepEqual(result.Data.Errors, want) {
+		t.Fatalf("errors = %#v, want %#v", result.Data.Errors, want)
+	}
+}
+
 func TestHostModelContainsOnlyMinimalFacts(t *testing.T) {
 	typ := reflect.TypeOf(model.Host{})
 	want := []string{
 		"Hostname", "DistributionName", "DistributionID", "DistributionVersion",
-		"KernelRelease", "Architecture", "MachineID", "BootID", "DMIUUID", "MemoryTotalBytes",
+		"KernelRelease", "Architecture", "BootID", "DMIUUID", "MemoryTotalBytes",
 	}
 	got := make([]string, typ.NumField())
 	for index := 0; index < typ.NumField(); index++ {
@@ -141,11 +161,16 @@ func TestHostModelContainsOnlyMinimalFacts(t *testing.T) {
 
 func collectHostForTest(t *testing.T, host model.Host, status model.Status) coremodule.Result {
 	t.Helper()
+	return collectHostWithStatusForTest(t, host, model.CollectorStatus{
+		Collector: "host", Status: status, Errors: []string{},
+	})
+}
+
+func collectHostWithStatusForTest(t *testing.T, host model.Host, status model.CollectorStatus) coremodule.Result {
+	t.Helper()
 	providers, err := provider.NewSet("linux", fakeHostProvider{
-		host: host,
-		status: model.CollectorStatus{
-			Collector: "host", Status: status, Errors: []string{},
-		},
+		host:   host,
+		status: status,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -174,10 +199,21 @@ func TestHostModuleDescriptorAndUnsupportedProbe(t *testing.T) {
 func TestRecordIDFallsBackDeterministically(t *testing.T) {
 	t.Parallel()
 
-	host := model.Host{MachineID: "machine", DMIUUID: "dmi", Hostname: "server"}
+	host := model.Host{DMIUUID: "dmi", Hostname: "server"}
 	first := RecordID(host)
 	second := RecordID(host)
 	if first == "" || first != second {
 		t.Fatalf("record IDs = %q, %q", first, second)
+	}
+
+	bootChanged := host
+	bootChanged.BootID = "boot-2"
+	if got := RecordID(bootChanged); got != first {
+		t.Fatalf("record ID changed with boot ID: %q, %q", first, got)
+	}
+	dmiChanged := host
+	dmiChanged.DMIUUID = "dmi-2"
+	if got := RecordID(dmiChanged); got == first {
+		t.Fatalf("record ID did not change with DMI UUID: %q", got)
 	}
 }

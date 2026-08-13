@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -15,10 +14,10 @@ import (
 const factLimit = 1 << 20
 
 // Collect gathers fixed, read-only host facts and marks the result based on completeness.
-func Collect(ctx context.Context, root platform.Root) (model.Host, model.CollectorStatus) {
+func Collect(ctx context.Context, root platform.Root) (result model.Host, status model.CollectorStatus) {
 	started := time.Now().UTC()
-	status := model.CollectorStatus{Collector: "host", Status: model.StatusOK, StartedAt: started, Errors: []string{}}
-	result := model.Host{Architecture: runtime.GOARCH}
+	status = model.CollectorStatus{Collector: "host", Status: model.StatusOK, StartedAt: started, Errors: []string{}}
+	result = model.Host{Architecture: runtime.GOARCH}
 	defer func() {
 		status.FinishedAt = time.Now().UTC()
 		status.DurationMS = status.FinishedAt.Sub(started).Milliseconds()
@@ -41,15 +40,12 @@ func Collect(ctx context.Context, root platform.Root) (model.Host, model.Collect
 		}
 		return value
 	}
-	readIdentity := func(path string) string {
+	readIdentity := func(path string) (string, error) {
 		data, err := root.ReadFile(path, factLimit)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				status.Errors = append(status.Errors, path+": "+err.Error())
-			}
-			return ""
+			return "", err
 		}
-		return strings.TrimSpace(string(data))
+		return strings.TrimSpace(string(data)), nil
 	}
 
 	if data, err := root.ReadFile("/etc/os-release", factLimit); err == nil {
@@ -71,9 +67,9 @@ func Collect(ctx context.Context, root platform.Root) (model.Host, model.Collect
 	}
 	result.KernelRelease = readRequired("/proc/sys/kernel/osrelease")
 	result.Hostname = readRequired("/proc/sys/kernel/hostname")
-	result.MachineID = readIdentity("/etc/machine-id")
 	result.BootID = readRequired("/proc/sys/kernel/random/boot_id")
-	result.DMIUUID = readIdentity("/sys/class/dmi/id/product_uuid")
+	var dmiUUIDErr error
+	result.DMIUUID, dmiUUIDErr = readIdentity("/sys/class/dmi/id/product_uuid")
 	if data, err := root.ReadFile("/proc/meminfo", factLimit); err == nil {
 		result.MemoryTotalBytes = ParseMemoryBytes(data)
 		if result.MemoryTotalBytes == 0 {
@@ -83,9 +79,12 @@ func Collect(ctx context.Context, root platform.Root) (model.Host, model.Collect
 		status.Errors = append(status.Errors, "/proc/meminfo: "+err.Error())
 	}
 
-	hasStableIdentity := result.MachineID != "" || result.DMIUUID != ""
+	hasStableIdentity := result.DMIUUID != ""
 	if !hasStableIdentity {
 		status.Errors = append(status.Errors, "stable host identity unavailable")
+		if dmiUUIDErr != nil {
+			status.Errors = append(status.Errors, "/sys/class/dmi/id/product_uuid: "+dmiUUIDErr.Error())
+		}
 	}
 	switch {
 	case !hasStableIdentity && result.Hostname == "":

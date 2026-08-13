@@ -1,4 +1,4 @@
-// host 包采集主机身份、操作系统、CPU 和内存事实。
+// host 包采集主机身份、操作系统和内存容量事实。
 package host
 
 import (
