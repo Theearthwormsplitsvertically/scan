@@ -3,8 +3,24 @@ set -eu
 
 agent_binary=${1:-./asset-agent}
 
+if [ "$(id -u)" -ne 0 ]; then
+  printf '%s\n' '必须以 root 运行真实 Linux 验证。' >&2
+  exit 2
+fi
 if [ ! -x "$agent_binary" ]; then
-  printf '%s\n' "Agent binary is not executable: $agent_binary" >&2
+  printf '%s\n' "Agent 不可执行: $agent_binary" >&2
+  exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' '缺少 jq，无法校验 manifest。' >&2
+  exit 2
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256_file() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  printf '%s\n' '缺少 sha256sum 或 shasum。' >&2
   exit 2
 fi
 
@@ -13,34 +29,59 @@ chmod 0700 "$work_dir"
 installed_agent="$work_dir/asset-agent"
 cp "$agent_binary" "$installed_agent"
 chmod 0755 "$installed_agent"
+output_root="$work_dir/output"
+
+validate_batch() {
+  batch_dir=$1
+  manifest="$batch_dir/manifest.json"
+  [ -d "$batch_dir" ] || { printf '%s\n' "正式批次目录不存在: $batch_dir" >&2; exit 1; }
+  [ -f "$manifest" ] || { printf '%s\n' "manifest 不存在: $manifest" >&2; exit 1; }
+  [ "$(stat -c '%a' "$batch_dir")" = '700' ] || { printf '%s\n' "批次目录权限不是 0700: $batch_dir" >&2; exit 1; }
+  [ "$(stat -c '%a' "$manifest")" = '600' ] || { printf '%s\n' "manifest 权限不是 0600: $manifest" >&2; exit 1; }
+  jq -e '.schema_name == "asset-agent.batch-manifest" and .schema_version == "2.0"' "$manifest" >/dev/null
+
+  jq -r '.files[] | [.name, .records, .bytes, .sha256] | @tsv' "$manifest" |
+  while IFS="$(printf '\t')" read -r file_name expected_records expected_bytes expected_sha256; do
+    case "$file_name" in
+      ''|*/*|*\\*) printf '%s\n' "manifest 包含不安全文件名: $file_name" >&2; exit 1 ;;
+    esac
+    shard="$batch_dir/$file_name"
+    [ -f "$shard" ] || { printf '%s\n' "manifest 分片不存在: $shard" >&2; exit 1; }
+    [ "$(stat -c '%a' "$shard")" = '600' ] || { printf '%s\n' "分片权限不是 0600: $shard" >&2; exit 1; }
+    actual_records=$(wc -l < "$shard" | tr -d ' ')
+    actual_bytes=$(wc -c < "$shard" | tr -d ' ')
+    actual_sha256=$(sha256_file "$shard")
+    [ "$actual_records" = "$expected_records" ] || { printf '%s\n' "记录数不匹配: $shard" >&2; exit 1; }
+    [ "$actual_bytes" = "$expected_bytes" ] || { printf '%s\n' "字节数不匹配: $shard" >&2; exit 1; }
+    [ "$actual_sha256" = "$expected_sha256" ] || { printf '%s\n' "SHA-256 不匹配: $shard" >&2; exit 1; }
+  done
+}
 
 "$installed_agent" version > "$work_dir/version.json"
 "$installed_agent" doctor > "$work_dir/doctor.json"
-"$installed_agent" scan host
-"$installed_agent" scan network
-"$installed_agent" scan process
-"$installed_agent" scan socket
-"$installed_agent" scan all
+"$installed_agent" modules > "$work_dir/modules.json"
 
-output_dir="$work_dir/output"
-snapshot_file=$(find "$output_dir" -maxdepth 1 -type f -name 'all-*.json' | sort | tail -n 1)
+host_batch=$("$installed_agent" host scan --output-dir "$output_root")
+network_batch=$("$installed_agent" network scan --output-dir "$output_root")
+process_batch=$("$installed_agent" process scan --output-dir "$output_root")
+port_batch=$("$installed_agent" port scan --output-dir "$output_root")
+connection_batch=$("$installed_agent" connection scan --output-dir "$output_root")
+snapshot_batch=$("$installed_agent" all scan --output-dir "$output_root")
 
-printf '%s\n' 'Agent listening sockets:'
-if command -v jq >/dev/null 2>&1; then
-  jq -r '.sockets[] | select(.state == "LISTEN") | "\(.protocol) \(.local_address):\(.local_port) inode=\(.inode) pids=\(.pids | join(","))"' "$snapshot_file"
-else
-  printf '%s\n' 'jq is not installed; inspect the JSON report manually.'
+[ "$(stat -c '%a' "$output_root")" = '700' ]
+[ "$(stat -c '%a' "$output_root/inbox")" = '700' ]
+for batch_dir in "$host_batch" "$network_batch" "$process_batch" "$port_batch" "$connection_batch" "$snapshot_batch"; do
+  validate_batch "$batch_dir"
+done
+
+latest_snapshot=$(find "$output_root/inbox" -mindepth 1 -maxdepth 1 -type d -name 'snapshot-*' | sort | tail -n 1)
+[ "$latest_snapshot" = "$snapshot_batch" ] || { printf '%s\n' '最新正式快照目录与命令返回值不一致。' >&2; exit 1; }
+jq -e '[.modules[].module] | sort == ["connection","host","network","port","process"]' "$snapshot_batch/manifest.json" >/dev/null
+
+if find "$output_root/inbox" -mindepth 1 -maxdepth 1 -type d -name '.partial-*' | grep -q .; then
+  printf '%s\n' '验证后仍存在 .partial 批次。' >&2
+  exit 1
 fi
 
-printf '%s\n' 'Native operating-system reference:'
-uname -a
-if [ -r /etc/os-release ]; then
-  sed -n '1,20p' /etc/os-release
-fi
-if command -v ss >/dev/null 2>&1; then
-  ss -lntup || true
-else
-  printf '%s\n' 'ss is not installed; native socket comparison skipped.'
-fi
-
-printf '%s\n' "Verification completed. Reports retained at: $work_dir"
+printf '%s\n' '真实 Linux 协议 2.0 验证通过。'
+printf '%s\n' "验证产物保留在: $work_dir"
