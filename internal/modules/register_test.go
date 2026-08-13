@@ -1,0 +1,43 @@
+package modules
+
+import (
+	"reflect"
+	"testing"
+
+	coremodule "github.com/Theearthwormsplitsvertically/scan/internal/module"
+)
+
+func TestNewRegistryContainsOnlyImplementedModulesAndPlansAll(t *testing.T) {
+	t.Parallel()
+
+	registry, err := NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptors := registry.List()
+	listed := make([]string, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		listed = append(listed, descriptor.Name)
+	}
+	if !reflect.DeepEqual(listed, []string{"host", "network", "process"}) {
+		t.Fatalf("listed modules = %v", listed)
+	}
+	if _, exists := registry.Lookup("all"); exists {
+		t.Fatal("virtual all target was registered as a real module")
+	}
+	plan, err := registry.Plan("all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := moduleNames(plan); !reflect.DeepEqual(got, []string{"host", "network", "process"}) {
+		t.Fatalf("all plan = %v", got)
+	}
+}
+
+func moduleNames(items []coremodule.Module) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		names = append(names, item.Descriptor().Name)
+	}
+	return names
+}
