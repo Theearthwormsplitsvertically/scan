@@ -14,6 +14,7 @@ type Status string
 
 // 这些采集器和能力状态值区分完整结果与安全降级结果。
 const (
+	StatusComplete    Status = "complete"
 	StatusOK          Status = "ok"
 	StatusPartial     Status = "partial"
 	StatusDegraded    Status = "degraded"
