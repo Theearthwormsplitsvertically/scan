@@ -38,6 +38,12 @@ type SupportResult struct {
 	Errors []model.ErrorDetail `json:"errors"`
 }
 
+// Info 汇总模块静态描述和当前平台支持状态。
+type Info struct {
+	Descriptor Descriptor    `json:"descriptor"`
+	Support    SupportResult `json:"support"`
+}
+
 // Request 向模块提供已完成的依赖结果；依赖数据不会自动重复发布。
 type Request struct {
 	Dependencies map[string]Result
