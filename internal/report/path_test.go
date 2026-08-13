@@ -73,3 +73,57 @@ func TestDefaultOutputPathRejectsEmptyExecutablePath(t *testing.T) {
 		t.Fatal("DefaultOutputPath() error = nil, want error")
 	}
 }
+
+func TestDefaultOutputRootResolvesBesideExecutableWithoutCreatingIt(t *testing.T) {
+	t.Parallel()
+
+	installDir := t.TempDir()
+	executable := filepath.Join(installDir, "asset-agent")
+	if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := DefaultOutputRoot(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(installDir, "output")
+	if root != want {
+		t.Fatalf("root = %q, want %q", root, want)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("DefaultOutputRoot created the directory: %v", err)
+	}
+}
+
+func TestDefaultOutputRootRejectsEmptyExecutablePath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := DefaultOutputRoot(""); err == nil {
+		t.Fatal("empty executable path accepted")
+	}
+}
+
+func TestDefaultOutputRootResolvesExecutableSymlink(t *testing.T) {
+	t.Parallel()
+
+	realDir := t.TempDir()
+	linkDir := t.TempDir()
+	realExecutable := filepath.Join(realDir, "asset-agent")
+	if err := os.WriteFile(realExecutable, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(linkDir, "asset-agent-link")
+	if err := os.Symlink(realExecutable, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	root, err := DefaultOutputRoot(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(realDir, "output")
+	if root != want {
+		t.Fatalf("root = %q, want %q", root, want)
+	}
+}
