@@ -80,33 +80,60 @@ func (scanner *Scanner) Modules(ctx context.Context) ([]coremodule.Info, error) 
 	return infos, nil
 }
 
-// ScanTarget 执行 all 或一个注册模块及其硬依赖。
-func (scanner *Scanner) ScanTarget(ctx context.Context, target string) (model.Batch, error) {
+// Scan 执行全量扫描或显式模块集合及其硬依赖。
+func (scanner *Scanner) Scan(ctx context.Context, selection ScanSelection) (ScanOutcome, error) {
 	if err := ctx.Err(); err != nil {
-		return model.Batch{}, err
+		return ScanOutcome{}, err
 	}
-	plan, err := scanner.registry.Plan(target)
+	if selection.All && len(selection.Modules) > 0 {
+		return ScanOutcome{}, fmt.Errorf("all scan cannot include selected modules")
+	}
+	if !selection.All && len(selection.Modules) == 0 {
+		return ScanOutcome{}, fmt.Errorf("no modules selected")
+	}
+	selected := make(map[string]bool, len(selection.Modules))
+	selectedNames := make([]string, 0, len(selection.Modules))
+	for _, name := range selection.Modules {
+		if selected[name] {
+			continue
+		}
+		selected[name] = true
+		selectedNames = append(selectedNames, name)
+	}
+	sort.Strings(selectedNames)
+
+	var plan []coremodule.Module
+	var err error
+	requestedModule := "all"
+	batchType := model.BatchTypeSnapshot
+	if selection.All {
+		plan, err = scanner.registry.PlanAll()
+	} else {
+		plan, err = scanner.registry.PlanSelected(selectedNames)
+		batchType = model.BatchTypeModule
+		requestedModule = selectedNames[0]
+		if len(selectedNames) > 1 {
+			requestedModule = "multi"
+		}
+	}
 	if err != nil {
-		return model.Batch{}, err
+		return ScanOutcome{}, err
 	}
 	started := scanner.clock().UTC()
-	batchType := model.BatchTypeModule
-	if target == "all" {
-		batchType = model.BatchTypeSnapshot
-	}
 	platform := "unknown"
 	if scanner.providers != nil && scanner.providers.Platform() != "" {
 		platform = scanner.providers.Platform()
 	}
 	batch := model.Batch{
 		SchemaName: model.BatchSchemaName, SchemaVersion: model.BatchSchemaVersion,
-		ID: newScanID(started), Type: batchType, RequestedModule: target,
+		ID: newScanID(started), Type: batchType, RequestedModule: requestedModule,
 		Platform: platform, Agent: scanner.agent, StartedAt: started, Results: []model.ModuleResult{},
 	}
 	executed := make(map[string]coremodule.Result, len(plan))
+	recordCounts := make(map[string]int, len(plan))
 	for _, item := range plan {
 		if err := ctx.Err(); err != nil {
-			return model.Batch{}, err
+			return ScanOutcome{}, err
 		}
 		descriptor := item.Descriptor()
 		request := coremodule.Request{Dependencies: dependencyResults(descriptor, executed)}
@@ -117,8 +144,9 @@ func (scanner *Scanner) ScanTarget(ctx context.Context, target string) (model.Ba
 		}
 		result = normalizeCollectedResult(result, descriptor.Name)
 		executed[descriptor.Name] = result
+		recordCounts[descriptor.Name] = len(result.Data.Records)
 
-		published := target == "all" || descriptor.Name == target
+		published := selection.All || selected[descriptor.Name]
 		output := result.Data
 		output.Published = published
 		if !published {
@@ -128,7 +156,17 @@ func (scanner *Scanner) ScanTarget(ctx context.Context, target string) (model.Ba
 		batch.Results = append(batch.Results, output)
 	}
 	batch.FinishedAt = scanner.clock().UTC()
-	return batch, nil
+	return ScanOutcome{Batch: batch, RecordCounts: recordCounts}, nil
+}
+
+// ScanTarget 保留旧 CLI 迁移期间的单目标内部适配；新调用使用 Scan。
+func (scanner *Scanner) ScanTarget(ctx context.Context, target string) (model.Batch, error) {
+	selection := ScanSelection{Modules: []string{target}}
+	if target == "all" {
+		selection = ScanSelection{All: true}
+	}
+	outcome, err := scanner.Scan(ctx, selection)
+	return outcome.Batch, err
 }
 
 func dependencyResults(descriptor coremodule.Descriptor, executed map[string]coremodule.Result) map[string]coremodule.Result {

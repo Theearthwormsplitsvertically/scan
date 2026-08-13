@@ -89,6 +89,70 @@ func TestScannerSingleModuleHidesDependencyRecords(t *testing.T) {
 	}
 }
 
+func TestScannerMultipleModulesRunSharedDependencyOnce(t *testing.T) {
+	t.Parallel()
+
+	registry := coremodule.NewRegistry()
+	calls := map[string]int{}
+	items := []scannerFakeModule{
+		countingScannerModule("host", nil, calls),
+		countingScannerModule("network", []string{"host"}, calls),
+		countingScannerModule("process", []string{"host"}, calls),
+		countingScannerModule("port", []string{"process"}, calls),
+	}
+	for _, item := range items {
+		mustRegisterScannerModule(t, registry, item)
+	}
+	providers, _ := provider.NewSet("linux")
+	scanner := NewScannerWithClock(registry, providers, model.AgentInfo{Name: "test-agent"}, fixedScannerClock)
+
+	outcome, err := scanner.Scan(context.Background(), ScanSelection{Modules: []string{"network", "port", "network"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls["host"] != 1 || calls["network"] != 1 || calls["process"] != 1 || calls["port"] != 1 {
+		t.Fatalf("calls = %v", calls)
+	}
+	if outcome.Batch.Type != model.BatchTypeModule || outcome.Batch.RequestedModule != "multi" {
+		t.Fatalf("batch = %+v", outcome.Batch)
+	}
+	wantPublished := map[string]bool{"network": true, "port": true}
+	for _, result := range outcome.Batch.Results {
+		if result.Published != wantPublished[result.Module] {
+			t.Fatalf("published %s = %v", result.Module, result.Published)
+		}
+		if !result.Published && len(result.Records) != 0 {
+			t.Fatalf("dependency %s records were exposed", result.Module)
+		}
+	}
+	if outcome.RecordCounts["host"] != 1 || outcome.RecordCounts["network"] != 1 ||
+		outcome.RecordCounts["process"] != 1 || outcome.RecordCounts["port"] != 1 {
+		t.Fatalf("record counts = %v", outcome.RecordCounts)
+	}
+}
+
+func TestScannerRejectsAllWithSelectedModules(t *testing.T) {
+	t.Parallel()
+
+	providers, _ := provider.NewSet("linux")
+	scanner := NewScanner(coremodule.NewRegistry(), providers)
+	_, err := scanner.Scan(context.Background(), ScanSelection{All: true, Modules: []string{"host"}})
+	if err == nil {
+		t.Fatal("conflicting scan selection accepted")
+	}
+}
+
+func TestScannerRejectsEmptySelection(t *testing.T) {
+	t.Parallel()
+
+	providers, _ := provider.NewSet("linux")
+	scanner := NewScanner(coremodule.NewRegistry(), providers)
+	_, err := scanner.Scan(context.Background(), ScanSelection{})
+	if err == nil {
+		t.Fatal("empty scan selection accepted")
+	}
+}
+
 func TestScannerReturnsCanceledBeforePlanning(t *testing.T) {
 	t.Parallel()
 
@@ -225,6 +289,16 @@ func TestScannerDoctorAndModulesDegradeWithoutPlatformProvider(t *testing.T) {
 
 func recordingModule(name string) scannerFakeModule {
 	return scannerFakeModule{descriptor: coremodule.Descriptor{Name: name, Timeout: "1s"}}
+}
+
+func countingScannerModule(name string, dependencies []string, calls map[string]int) scannerFakeModule {
+	return scannerFakeModule{
+		descriptor: coremodule.Descriptor{Name: name, Timeout: "1s", HardDependencies: dependencies},
+		collect: func(context.Context, provider.Lookup, coremodule.Request) coremodule.Result {
+			calls[name]++
+			return successfulFakeResult(name)
+		},
+	}
 }
 
 func successfulFakeResult(name string) coremodule.Result {

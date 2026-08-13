@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Theearthwormsplitsvertically/scan/internal/agent"
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 	coremodule "github.com/Theearthwormsplitsvertically/scan/internal/module"
 )
@@ -44,6 +45,18 @@ func (runtime fakeRuntime) ScanTarget(_ context.Context, target string) (model.B
 		batch.Type = model.BatchTypeModule
 	}
 	return batch, runtime.scanErr
+}
+
+func (runtime fakeRuntime) Scan(_ context.Context, selection agent.ScanSelection) (agent.ScanOutcome, error) {
+	target := "all"
+	if !selection.All {
+		target = selection.Modules[0]
+		if len(selection.Modules) > 1 {
+			target = "multi"
+		}
+	}
+	batch, err := runtime.ScanTarget(context.Background(), target)
+	return agent.ScanOutcome{Batch: batch, RecordCounts: map[string]int{}}, err
 }
 
 func TestRunVersionWritesMachineReadableVersion(t *testing.T) {
@@ -263,6 +276,7 @@ func TestRunRejectsUnknownModuleActionAndUnavailableRuntime(t *testing.T) {
 type agentRuntimeForTest interface {
 	Doctor(context.Context) (model.DoctorReport, error)
 	Modules(context.Context) ([]coremodule.Info, error)
+	Scan(context.Context, agent.ScanSelection) (agent.ScanOutcome, error)
 	ScanTarget(context.Context, string) (model.Batch, error)
 }
 
