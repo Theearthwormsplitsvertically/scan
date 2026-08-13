@@ -57,26 +57,52 @@ validate_batch() {
   done
 }
 
+scan_and_get_batch() {
+  summary_file=$1
+  shift
+  "$installed_agent" "$@" -output "$output_root" | tee "$summary_file" >&2
+  batch_dir=$(sed -n 's/^Output: //p' "$summary_file" | tail -n 1)
+  [ -n "$batch_dir" ] || { printf '%s\n' "摘要缺少 Output: $summary_file" >&2; exit 1; }
+  printf '%s\n' "$batch_dir"
+}
+
+expect_usage_error() {
+  set +e
+  "$installed_agent" "$@" >/dev/null 2>&1
+  code=$?
+  set -e
+  [ "$code" -eq 2 ] || { printf '%s\n' "旧语法未返回 2: $* ($code)" >&2; exit 1; }
+}
+
 "$installed_agent" version > "$work_dir/version.json"
 "$installed_agent" doctor > "$work_dir/doctor.json"
 "$installed_agent" modules > "$work_dir/modules.json"
 
-host_batch=$("$installed_agent" host scan --output-dir "$output_root")
-network_batch=$("$installed_agent" network scan --output-dir "$output_root")
-process_batch=$("$installed_agent" process scan --output-dir "$output_root")
-port_batch=$("$installed_agent" port scan --output-dir "$output_root")
-connection_batch=$("$installed_agent" connection scan --output-dir "$output_root")
-snapshot_batch=$("$installed_agent" all scan --output-dir "$output_root")
+host_batch=$(scan_and_get_batch "$work_dir/host.txt" -host)
+network_batch=$(scan_and_get_batch "$work_dir/network.txt" -network)
+process_batch=$(scan_and_get_batch "$work_dir/process.txt" -process)
+port_batch=$(scan_and_get_batch "$work_dir/port.txt" -port)
+connection_batch=$(scan_and_get_batch "$work_dir/connection.txt" -connection)
+multi_batch=$(scan_and_get_batch "$work_dir/multi.txt" -network -port)
+snapshot_batch=$(scan_and_get_batch "$work_dir/snapshot.txt" scan)
 
 [ "$(stat -c '%a' "$output_root")" = '700' ]
 [ "$(stat -c '%a' "$output_root/inbox")" = '700' ]
-for batch_dir in "$host_batch" "$network_batch" "$process_batch" "$port_batch" "$connection_batch" "$snapshot_batch"; do
+for batch_dir in "$host_batch" "$network_batch" "$process_batch" "$port_batch" "$connection_batch" "$multi_batch" "$snapshot_batch"; do
   validate_batch "$batch_dir"
 done
 
 latest_snapshot=$(find "$output_root/inbox" -mindepth 1 -maxdepth 1 -type d -name 'snapshot-*' | sort | tail -n 1)
 [ "$latest_snapshot" = "$snapshot_batch" ] || { printf '%s\n' '最新正式快照目录与命令返回值不一致。' >&2; exit 1; }
 jq -e '[.modules[].module] | sort == ["connection","host","network","port","process"]' "$snapshot_batch/manifest.json" >/dev/null
+jq -e '.batch_type == "module" and .requested_module == "multi"' "$multi_batch/manifest.json" >/dev/null
+jq -e '.batch_type == "snapshot" and .requested_module == "all"' "$snapshot_batch/manifest.json" >/dev/null
+
+expect_usage_error host scan
+expect_usage_error all scan
+expect_usage_error scan host
+expect_usage_error scan socket
+expect_usage_error -host -o x
 
 if find "$output_root/inbox" -mindepth 1 -maxdepth 1 -type d -name '.partial-*' | grep -q .; then
   printf '%s\n' '验证后仍存在 .partial 批次。' >&2
