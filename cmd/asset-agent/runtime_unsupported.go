@@ -2,9 +2,23 @@
 
 package main
 
-import "github.com/Theearthwormsplitsvertically/scan/internal/agent"
+import (
+	"runtime"
 
-// newRuntime 让非 Linux 开发构建明确返回“无法采集”，避免误采集当前主机。
-func newRuntime() agent.Runtime {
-	return agent.UnavailableRuntime{}
+	"github.com/Theearthwormsplitsvertically/scan/internal/agent"
+	"github.com/Theearthwormsplitsvertically/scan/internal/modules"
+	"github.com/Theearthwormsplitsvertically/scan/internal/provider"
+)
+
+// newRuntime 在其他系统保留相同模块命令，并让缺失能力明确返回 unsupported。
+func newRuntime() (agent.Runtime, error) {
+	providers, err := provider.NewSet(runtime.GOOS)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := modules.NewRegistry()
+	if err != nil {
+		return nil, err
+	}
+	return agent.NewScanner(registry, providers), nil
 }
