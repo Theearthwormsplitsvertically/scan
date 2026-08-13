@@ -1,3 +1,4 @@
 .worktrees/
 dist/
+docs/legacy/*.json
 
