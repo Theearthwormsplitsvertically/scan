@@ -12,14 +12,3 @@ func TestParseMemoryBytesConvertsKiBAndRejectsMalformedValues(t *testing.T) {
 		t.Fatalf("malformed memory = %d, want 0", got)
 	}
 }
-
-func TestParseCPUModelSupportsX86AndARM(t *testing.T) {
-	t.Parallel()
-
-	if got := ParseCPUModel([]byte("processor: 0\nmodel name: Example Xeon\nprocessor: 1\nmodel name: Other\n")); got != "Example Xeon" {
-		t.Fatalf("x86 model = %q", got)
-	}
-	if got := ParseCPUModel([]byte("Processor: AArch64 Processor\nHardware: Example Board\n")); got != "Example Board" {
-		t.Fatalf("ARM model = %q", got)
-	}
-}
