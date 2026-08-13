@@ -37,7 +37,7 @@ func TestRegistryListsNewModuleWithoutKnownNameTable(t *testing.T) {
 	if len(listed) != 1 || listed[0].Name != "custom" {
 		t.Fatalf("listed = %+v", listed)
 	}
-	plan, err := registry.Plan("all")
+	plan, err := registry.PlanAll()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,12 +53,53 @@ func TestRegistryPlansHardDependenciesOnce(t *testing.T) {
 	mustRegister(t, registry, fakeModule{name: "host"})
 	mustRegister(t, registry, fakeModule{name: "process", hard: []string{"host"}})
 	mustRegister(t, registry, fakeModule{name: "port", hard: []string{"process", "host"}})
-	plan, err := registry.Plan("port")
+	plan, err := registry.PlanSelected([]string{"port"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := names(plan); !reflect.DeepEqual(got, []string{"host", "process", "port"}) {
 		t.Fatalf("plan = %v", got)
+	}
+}
+
+func TestRegistryPlansMultipleTargetsWithSharedDependenciesOnce(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRegistry()
+	mustRegister(t, registry, fakeModule{name: "host"})
+	mustRegister(t, registry, fakeModule{name: "network", hard: []string{"host"}})
+	mustRegister(t, registry, fakeModule{name: "process", hard: []string{"host"}})
+	mustRegister(t, registry, fakeModule{name: "port", hard: []string{"process"}})
+
+	plan, err := registry.PlanSelected([]string{"port", "network", "port"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(plan); !reflect.DeepEqual(got, []string{"host", "network", "process", "port"}) {
+		t.Fatalf("plan = %v", got)
+	}
+}
+
+func TestRegistryRejectsEmptySelection(t *testing.T) {
+	t.Parallel()
+
+	plan, err := NewRegistry().PlanSelected(nil)
+	if err == nil || plan != nil {
+		t.Fatalf("plan = %v, err = %v", plan, err)
+	}
+}
+
+func TestRegistryRejectsCLIReservedNames(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"all", "output", "help", "version", "doctor", "modules", "scan"} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if err := NewRegistry().Register(fakeModule{name: name}); err == nil {
+				t.Fatalf("reserved module name %q accepted", name)
+			}
+		})
 	}
 }
 
@@ -69,7 +110,7 @@ func TestRegistryPlansSameLayerAlphabetically(t *testing.T) {
 	mustRegister(t, registry, fakeModule{name: "zeta"})
 	mustRegister(t, registry, fakeModule{name: "alpha"})
 	mustRegister(t, registry, fakeModule{name: "target", hard: []string{"zeta", "alpha"}})
-	plan, err := registry.Plan("target")
+	plan, err := registry.PlanSelected([]string{"target"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +126,7 @@ func TestRegistryFinishesDependencyLayerBeforeDependents(t *testing.T) {
 	mustRegister(t, registry, fakeModule{name: "alpha"})
 	mustRegister(t, registry, fakeModule{name: "zeta"})
 	mustRegister(t, registry, fakeModule{name: "beta", hard: []string{"alpha"}})
-	plan, err := registry.Plan("all")
+	plan, err := registry.PlanAll()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +170,7 @@ func TestRegistryRejectsUnknownDependencyAndCycleWithoutPartialPlan(t *testing.T
 	t.Run("unknown dependency", func(t *testing.T) {
 		registry := NewRegistry()
 		mustRegister(t, registry, fakeModule{name: "process", hard: []string{"host"}})
-		plan, err := registry.Plan("process")
+		plan, err := registry.PlanSelected([]string{"process"})
 		if err == nil || plan != nil {
 			t.Fatalf("plan = %v, err = %v", names(plan), err)
 		}
@@ -139,7 +180,7 @@ func TestRegistryRejectsUnknownDependencyAndCycleWithoutPartialPlan(t *testing.T
 		registry := NewRegistry()
 		mustRegister(t, registry, fakeModule{name: "alpha", hard: []string{"beta"}})
 		mustRegister(t, registry, fakeModule{name: "beta", hard: []string{"alpha"}})
-		plan, err := registry.Plan("all")
+		plan, err := registry.PlanAll()
 		if err == nil || plan != nil {
 			t.Fatalf("plan = %v, err = %v", names(plan), err)
 		}
@@ -149,7 +190,7 @@ func TestRegistryRejectsUnknownDependencyAndCycleWithoutPartialPlan(t *testing.T
 func TestRegistryRejectsUnknownTarget(t *testing.T) {
 	t.Parallel()
 
-	plan, err := NewRegistry().Plan("missing")
+	plan, err := NewRegistry().PlanSelected([]string{"missing"})
 	if err == nil || plan != nil {
 		t.Fatalf("plan = %v, err = %v", plan, err)
 	}

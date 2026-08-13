@@ -25,7 +25,7 @@ func TestNewRegistryContainsOnlyImplementedModulesAndPlansAll(t *testing.T) {
 	if _, exists := registry.Lookup("all"); exists {
 		t.Fatal("virtual all target was registered as a real module")
 	}
-	plan, err := registry.Plan("all")
+	plan, err := registry.PlanAll()
 	if err != nil {
 		t.Fatal(err)
 	}
