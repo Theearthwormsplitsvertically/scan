@@ -119,13 +119,13 @@ root 主进程不把第三方插件加载到自身地址空间。插件不可获
 | 模块 | 正式扫描命令 | 主要职责 | 默认周期 |
 |---|---|---|---:|
 | `host` | `asset-agent host scan` | 主机身份、OS、内核、架构和启动信息 | 24 小时 |
-| `resource` | `asset-agent resource scan` | CPU、内存、Load、Swap及扫描器自身指标 | 1 分钟 |
+| `resource` | `asset-agent resource scan` | CPU、内存、Load、Swap及扫描器自身指标 | 10 分钟 |
 | `filesystem` | `asset-agent filesystem scan` | 挂载点、容量、inode和使用率 | 30 分钟 |
 | `disk` | `asset-agent disk scan` | 块设备、吞吐、IOPS和繁忙时间 | 30 分钟 |
-| `network` | `asset-agent network scan` | 网卡、IP、路由、DNS和网络作用域 | 30 分钟 |
+| `network` | `asset-agent network scan` | 网卡、IP、路由、DNS和网络作用域 | 6 小时 |
 | `process` | `asset-agent process scan` | 宿主机及容器进程、身份和运行上下文 | 12 小时 |
-| `port` | `asset-agent port scan` | 监听端口、协议、地址及归属 | 5 分钟 |
-| `connection` | `asset-agent connection scan` | 聚合后的服务调用和外部依赖 | 5 分钟 |
+| `port` | `asset-agent port scan` | 监听端口、协议、地址及归属 | 1 小时 |
+| `connection` | `asset-agent connection scan` | 聚合后的服务调用和外部依赖 | 1 小时 |
 | `package` | `asset-agent package scan` | 宿主机及容器内已安装软件包 | 24 小时 |
 | `container` | `asset-agent container scan` | 运行时、镜像、容器、挂载、网络和状态 | 12 小时 |
 | `service` | `asset-agent service scan` | 操作系统服务和通用运行服务实例 | 12 小时 |
@@ -331,16 +331,16 @@ component → application → service/container → process → port → host
   "metric_name": "cpu.utilization",
   "unit": "percent",
   "interval_start": "2026-08-13T10:00:00Z",
-  "interval_end": "2026-08-13T10:01:00Z",
-  "sample_count": 6,
+  "interval_end": "2026-08-13T10:10:00Z",
+  "sample_count": 1,
   "current": 12.4,
-  "minimum": 8.1,
-  "maximum": 27.6,
-  "average": 14.3
+  "minimum": 12.4,
+  "maximum": 12.4,
+  "average": 12.4
 }
 ```
 
-主机级 CPU、Load、内存、Swap、磁盘 IO 和网络吞吐使用轻量计数器按分钟聚合。文件系统容量与 inode 按 30 分钟采集。已知容器和已跟踪服务进程可以使用独立子周期采样，但资源采样不得触发完整进程、容器、服务或组件枚举。资产周期和指标周期必须分别配置。
+主机级 CPU、Load、内存、Swap、磁盘 IO 和网络吞吐使用轻量计数器每 10 分钟采集。单次只有一个有效样本时，`minimum`、`maximum`、`average` 与 `current` 相同。文件系统容量与 inode 按 30 分钟采集。已知容器和已跟踪服务进程可以使用独立子周期采样，但资源采样不得触发完整进程、容器、服务或组件枚举。资产周期和指标周期必须分别配置。
 
 ## 9. 完整性语义
 
@@ -503,7 +503,7 @@ CMDB 成功校验并入库后写入：
 
 ### 12.2 默认周期
 
-默认周期以第 5 节模块表为准。资源模块每分钟输出主机级 CPU、内存、Load 和 Swap 聚合；已知容器与已跟踪服务进程的资源指标可以使用独立子周期采样，但不能触发完整进程资产遍历。文件系统和磁盘资产按 30 分钟采集；进程、容器和服务每 12 小时完整校准；组件和应用每 24 小时完整校准。
+默认周期以第 5 节模块表为准。资源模块每 10 分钟输出主机级 CPU、内存、Load 和 Swap 指标；网络资产每 6 小时完整校准；端口和连接每 1 小时完整校准。已知容器与已跟踪服务进程的资源指标可以使用独立子周期采样，但不能触发完整进程资产遍历。文件系统和磁盘资产按 30 分钟采集；进程、容器和服务每 12 小时完整校准；组件和应用每 24 小时完整校准。
 
 ### 12.3 事件来源
 
@@ -539,7 +539,7 @@ Linux Provider 优先使用 Netlink、systemd、容器运行时事件和受限�
 ## 14. 常驻服务、心跳与故障恢复
 
 - `asset-agent run` 作为受 systemd 约束的常驻服务运行；
-- `resource` 每分钟指标批次兼作扫描器和主机心跳；
+- `resource` 每 10 分钟指标批次兼作扫描器和主机心跳；
 - `status` 输出最近完整快照、模块延迟、队列、事件序列、输出积压、磁盘水位和扫描器自身 CPU、内存、IO；
 - 服务器宕机后扫描器无法继续输出，由 CMDB 根据最后心跳超时判定失联；
 - CMDB 必须保留最后一个完整快照，主机失联不等于资产删除；
@@ -584,7 +584,7 @@ scheduler:
 modules:
   resource:
     enabled: true
-    interval: 1m
+    interval: 10m
   process:
     enabled: true
     interval: 12h
