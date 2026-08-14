@@ -8,7 +8,11 @@ import (
 
 const redacted = "[REDACTED]"
 
-var sensitiveKeys = []string{"password", "passwd", "token", "secret", "authorization", "cookie", "api_key", "apikey", "private_key"}
+var sensitiveKeyTokens = map[string]bool{
+	"password": true, "passwd": true, "token": true, "secret": true,
+	"authorization": true, "cookie": true, "credential": true, "credentials": true,
+	"apikey": true, "privatekey": true,
+}
 
 // RedactArgs 返回已移除凭据类值的 args 副本。
 // 它保留参数数量，使消费者仍能理解原始命令行结构。
@@ -26,6 +30,10 @@ func RedactArgs(args []string) []string {
 			result[index] = "Authorization: " + redacted
 			continue
 		}
+		if value, changed := redactURL(argument); changed {
+			result[index] = value
+			continue
+		}
 		if key, _, found := strings.Cut(argument, "="); found && isSensitiveKey(strings.TrimLeft(key, "-")) {
 			result[index] = key + "=" + redacted
 			continue
@@ -34,21 +42,52 @@ func RedactArgs(args []string) []string {
 			redactNext = true
 			continue
 		}
-		if parsed, err := url.Parse(argument); err == nil && parsed.User != nil {
-			parsed.User = url.User(redacted)
-			result[index] = parsed.String()
-		}
 	}
 	return result
 }
 
-// isSensitiveKey 在去掉选项前缀后识别支持的敏感凭据键名。
+// isSensitiveKey 识别精确键和由 -、_、. 组合的凭据键，同时保留 -p 等含义不明确的短参数。
 func isSensitiveKey(key string) bool {
-	key = strings.ToLower(strings.TrimSpace(key))
-	for _, sensitive := range sensitiveKeys {
-		if key == sensitive {
+	key = strings.TrimSpace(key)
+	if strings.HasPrefix(key, "-D") || strings.HasPrefix(key, "-d") {
+		key = key[2:]
+	} else {
+		key = strings.TrimLeft(key, "-")
+	}
+	tokens := strings.FieldsFunc(strings.ToLower(key), func(character rune) bool {
+		return character == '-' || character == '_' || character == '.'
+	})
+	for index, token := range tokens {
+		if sensitiveKeyTokens[token] {
+			return true
+		}
+		if index+1 < len(tokens) && ((token == "api" && tokens[index+1] == "key") ||
+			(token == "private" && tokens[index+1] == "key")) {
 			return true
 		}
 	}
 	return false
+}
+
+func redactURL(argument string) (string, bool) {
+	parsed, err := url.Parse(argument)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return argument, false
+	}
+	changed := false
+	if parsed.User != nil {
+		parsed.User = url.User(redacted)
+		changed = true
+	}
+	query := parsed.Query()
+	for key := range query {
+		if isSensitiveKey(key) {
+			query.Set(key, redacted)
+			changed = true
+		}
+	}
+	if changed {
+		parsed.RawQuery = query.Encode()
+	}
+	return parsed.String(), changed
 }
