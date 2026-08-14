@@ -120,7 +120,8 @@
 
 <blockquote>
 <p>状态：融合设计稿（未实现，2026-08-14 更新）。本文档以当前已经落地的动态注册表、跨平台 Provider、Nmap 风格命令、依赖编排和批次协议 2.0 为内核，补充「服务 / 包 / 容器 / 文件 / 组件 / 应用」能力，遵循同一套模块化、故障隔离、证据链与稳定标识原则。</p>
-<p>已实现模块（<code>host</code>、<code>network</code>、<code>process</code>、<code>port</code>、<code>connection</code>）继续作为兼容基线；本文新增的 <code>service</code>、<code>package</code>、<code>container</code>、<code>file</code>、<code>component</code>、<code>application</code> 均属后续阶段，当前协议不为其输出伪空字段。实施新增模块前，只需补齐本文明确要求的“软依赖自动编排但不阻断”语义，不重写 CLI、Provider、统一模型或报告层。</p>
+<p><strong>规范源</strong>：本仓库当前以这份已跟踪 HTML 为组件与容器设计的唯一实现依据；如本地工作区存在同名 Markdown 副本，其内容不参与实现和验收，后续只有在建立可重复的 HTML 生成流程后才恢复 Markdown 源文件。</p>
+<p>已实现模块（<code>host</code>、<code>network</code>、<code>process</code>、<code>port</code>、<code>connection</code>）继续作为兼容基线；本文新增的 <code>service</code>、<code>package</code>、<code>container</code>、<code>file</code>、<code>component</code>、<code>application</code> 均属后续阶段，当前协议不为其输出伪空字段。扫描器内核现已支持“软依赖自动编排但不阻断”，新增模块无需重写 CLI、Provider、统一模型或报告层。</p>
 <p><strong>范围说明</strong>：本文不是扫描器全部模块的总规格。总体路线中的 <code>resource</code>（10 分钟）、<code>filesystem</code>、<code>disk</code>、常驻调度、消费确认和保留清理仍按扫描器总体设计独立实施；本文列出的周期是模块元数据和外部调度建议，当前扫描器不会自行常驻定时执行。</p>
 </blockquote>
 
@@ -179,7 +180,7 @@
 <li><strong>软依赖</strong>：同样自动进入本次执行计划并去重；失败时目标模块仍消费其它可用事实继续执行，结果降为 <code>partial</code>/<code>degraded</code>、<code>authoritative=false</code>，不得整链阻断。</li>
 <li><strong>Provider 能力</strong>：例如 <code>socket</code> 是底层能力，不是模块名；模块依赖只能引用注册表中的真实模块，例如 <code>port</code>。</li>
 </ul>
-<p>当前执行器只会自动规划硬依赖，软依赖仅在已经执行时传入。实施本文新增模块前必须先补齐上述软依赖计划语义及测试。人工执行模块命令时依赖使用本次新鲜事实；周期调度器应合并同一时点到期模块，使同一数据源在一个批次内只采一次。</p>
+<p>当前执行器已经把硬依赖与软依赖都纳入递归闭包和拓扑顺序，并检测未知依赖与硬/软混合环；只有硬依赖失败会阻断目标模块，软依赖失败会使目标结果降为非权威 <code>partial</code>。人工执行模块命令时依赖使用本次新鲜事实；周期调度器应合并同一时点到期模块，使同一数据源在一个批次内只采一次。</p>
 
 <h2>3. 模块总览</h2>
 <table>
@@ -272,10 +273,9 @@ sudo asset-agent scan</code></pre>
 <li><strong>record_type</strong>：<code>service</code>。</li>
 </ul>
 <p><code>attributes</code>：</p>
-<pre><code>unit_name、unit_state（active/inactive/failed...）、
-main_pid、exec_start、user、group、
-load_state、fragment_path、description、
-enabled_state（enabled/disabled/static，可选）</code></pre>
+<pre><code>service_manager、native_service_key、display_name、state、
+main_pid、exec_start、user、group、description、
+unit_name、unit_state、load_state、fragment_path、enabled_state（Linux systemd 扩展）</code></pre>
 <p><code>states</code>：<code>installed</code>（Unit 存在）、<code>running</code>（active）、<code>loaded</code>（已加载）。</p>
 <p>关系：</p>
 <table>
@@ -469,8 +469,8 @@ unknown  无任何可验证证据</code></pre>
 </ul>
 
 <h2>14. 分阶段实现</h2>
-<pre><code>阶段1（已完成） host/network/process/port/connection + 内核
-阶段2  软依赖计划语义 + service + package ← 先保证故障隔离，再增加事实源
+<pre><code>阶段1（已完成） host/network/process/port/connection + 内核（含软依赖计划与非阻断降级）
+阶段2  service + package        ← 数据源确定、结论可靠，先增加事实源
 阶段3  container                ← Docker/containerd，中等复杂度
 阶段4  file + component         ← 先补文件证据，再实现规则推导
 阶段5  application              ← 聚合，依赖前面全部，最后做</code></pre>
