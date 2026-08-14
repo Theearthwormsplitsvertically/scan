@@ -23,7 +23,7 @@ func New() Collector { return Collector{} }
 func (Collector) Descriptor() coremodule.Descriptor {
 	return coremodule.Descriptor{
 		Name: "process", SchemaVersion: model.BatchSchemaVersion,
-		RecordTypes: []string{"process"}, Commands: coremodule.StandardCommands(),
+		RecordTypes:          []string{"process"},
 		RequiredCapabilities: []string{provider.CapabilityProcess}, OptionalCapabilities: []string{},
 		HardDependencies: []string{"host"}, SoftDependencies: []string{},
 		DefaultInterval: "12h", ResourceClass: "medium", Timeout: "2m",

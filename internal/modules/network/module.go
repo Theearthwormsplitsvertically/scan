@@ -29,7 +29,7 @@ func New() Collector { return Collector{} }
 func (Collector) Descriptor() coremodule.Descriptor {
 	return coremodule.Descriptor{
 		Name: "network", SchemaVersion: model.BatchSchemaVersion,
-		RecordTypes: []string{"network_interface", "address", "route"}, Commands: coremodule.StandardCommands(),
+		RecordTypes:          []string{"network_interface", "address", "route"},
 		RequiredCapabilities: []string{provider.CapabilityNetwork}, OptionalCapabilities: []string{},
 		HardDependencies: []string{"host"}, SoftDependencies: []string{},
 		DefaultInterval: "6h", ResourceClass: "light", Timeout: "30s",

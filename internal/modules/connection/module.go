@@ -23,7 +23,7 @@ func New() Collector { return Collector{} }
 func (Collector) Descriptor() coremodule.Descriptor {
 	return coremodule.Descriptor{
 		Name: "connection", SchemaVersion: model.BatchSchemaVersion,
-		RecordTypes: []string{"connection"}, Commands: coremodule.StandardCommands(),
+		RecordTypes:          []string{"connection"},
 		RequiredCapabilities: []string{provider.CapabilitySocket}, OptionalCapabilities: []string{},
 		HardDependencies: []string{"port"}, SoftDependencies: []string{},
 		DefaultInterval: "1h", ResourceClass: "light", Timeout: "30s",

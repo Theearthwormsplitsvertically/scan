@@ -1,13 +1,10 @@
 // model 包定义所有采集器共享的稳定本地 JSON 协议。
 package model
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
 
-// SchemaVersion 标识当前 snapshot 和 doctor JSON 协议版本。
-const SchemaVersion = "1.0"
+// DoctorSchemaVersion 标识 doctor 环境诊断 JSON 协议版本。
+const DoctorSchemaVersion = "1.0"
 
 // Status 记录采集器或已检测能力的结果。
 type Status string
@@ -29,15 +26,6 @@ type AgentInfo struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`
 	BuildTime string `json:"build_time"`
-}
-
-// ScanMetadata 标识一次扫描并记录其墙钟耗时。
-type ScanMetadata struct {
-	ID         string    `json:"id"`
-	Type       string    `json:"type"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
-	DurationMS int64     `json:"duration_ms"`
 }
 
 // Capability 说明某项 Linux 功能是否可用，并在适用时记录其降级路径。
@@ -66,16 +54,6 @@ type SystemProfile struct {
 	SecurityModules     []string        `json:"security_modules"`
 	ContainerRuntimes   []string        `json:"container_runtimes"`
 	AvailableSources    map[string]bool `json:"available_sources"`
-}
-
-// CollectionStrategy 记录模块实际选择的采集后端及其降级依据。
-type CollectionStrategy struct {
-	Module          string   `json:"module"`
-	Backend         string   `json:"backend"`
-	RequiredSources []string `json:"required_sources"`
-	MissingSources  []string `json:"missing_sources"`
-	Status          Status   `json:"status"`
-	Reason          string   `json:"reason,omitempty"`
 }
 
 // DoctorReport 是 doctor 输出的轻量环境和能力报告。
@@ -168,40 +146,6 @@ type Socket struct {
 	ProcessIDs    []string `json:"process_ids"`
 }
 
-// Service 为后续服务采集器预留 JSON 结构。
-type Service struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// Package 为后续软件包采集器预留 JSON 结构。
-type Package struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-}
-
-// Container 为后续容器采集器预留 JSON 结构。
-type Container struct {
-	ID      string `json:"id"`
-	Name    string `json:"name,omitempty"`
-	Runtime string `json:"runtime,omitempty"`
-}
-
-// File 为后续可执行文件和动态库采集器预留 JSON 结构。
-type File struct {
-	ID     string `json:"id"`
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256,omitempty"`
-}
-
-// Application 为后续应用深度采集器预留 JSON 结构。
-type Application struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-}
-
 // Relationship 记录两个采集对象之间有证据支撑的有向关联。
 type Relationship struct {
 	ID         string    `json:"id"`
@@ -225,82 +169,6 @@ type CollectorStatus struct {
 	Errors     []string  `json:"errors"`
 	Fallback   string    `json:"fallback,omitempty"`
 	Backend    string    `json:"backend,omitempty"`
-}
-
-// ResourceUsage 记录 Agent 在一次扫描中的自身资源指标。
-type ResourceUsage struct {
-	WallTimeMS     int64  `json:"wall_time_ms"`
-	HeapAllocBytes uint64 `json:"heap_alloc_bytes"`
-	HeapDeltaBytes int64  `json:"heap_delta_bytes"`
-}
-
-// Snapshot 是 Agent 写出的完整一次性扫描文档。
-type Snapshot struct {
-	SchemaName        string               `json:"schema_name"`
-	SchemaVersion     string               `json:"schema_version"`
-	Scan              ScanMetadata         `json:"scan"`
-	Agent             AgentInfo            `json:"agent"`
-	Capabilities      CapabilityReport     `json:"capabilities"`
-	SystemProfile     SystemProfile        `json:"system_profile"`
-	Strategies        []CollectionStrategy `json:"strategies"`
-	Host              Host                 `json:"host"`
-	NetworkInterfaces []NetworkInterface   `json:"network_interfaces"`
-	Addresses         []Address            `json:"addresses"`
-	Routes            []Route              `json:"routes"`
-	Processes         []Process            `json:"processes"`
-	Sockets           []Socket             `json:"sockets"`
-	Services          []Service            `json:"services"`
-	Packages          []Package            `json:"packages"`
-	Containers        []Container          `json:"containers"`
-	Files             []File               `json:"files"`
-	Applications      []Application        `json:"applications"`
-	Relationships     []Relationship       `json:"relationships"`
-	CollectorStatus   []CollectorStatus    `json:"collector_status"`
-	ResourceUsage     ResourceUsage        `json:"resource_usage"`
-}
-
-// MarshalJSON 将每个集合规范化为 []，避免下游消费者收到 null。
-func (snapshot Snapshot) MarshalJSON() ([]byte, error) {
-	normalized := snapshot
-	normalized.Capabilities.Items = ensureSlice(normalized.Capabilities.Items)
-	normalized.SystemProfile.SecurityModules = ensureSlice(normalized.SystemProfile.SecurityModules)
-	normalized.SystemProfile.ContainerRuntimes = ensureSlice(normalized.SystemProfile.ContainerRuntimes)
-	if normalized.SystemProfile.AvailableSources == nil {
-		normalized.SystemProfile.AvailableSources = map[string]bool{}
-	}
-	normalized.Strategies = ensureSlice(normalized.Strategies)
-	for index := range normalized.Strategies {
-		normalized.Strategies[index].RequiredSources = ensureSlice(normalized.Strategies[index].RequiredSources)
-		normalized.Strategies[index].MissingSources = ensureSlice(normalized.Strategies[index].MissingSources)
-	}
-	normalized.NetworkInterfaces = ensureSlice(normalized.NetworkInterfaces)
-	normalized.Addresses = ensureSlice(normalized.Addresses)
-	normalized.Routes = ensureSlice(normalized.Routes)
-	normalized.Processes = ensureSlice(normalized.Processes)
-	normalized.Sockets = ensureSlice(normalized.Sockets)
-	normalized.Services = ensureSlice(normalized.Services)
-	normalized.Packages = ensureSlice(normalized.Packages)
-	normalized.Containers = ensureSlice(normalized.Containers)
-	normalized.Files = ensureSlice(normalized.Files)
-	normalized.Applications = ensureSlice(normalized.Applications)
-	normalized.Relationships = ensureSlice(normalized.Relationships)
-	normalized.CollectorStatus = ensureSlice(normalized.CollectorStatus)
-	for index := range normalized.NetworkInterfaces {
-		normalized.NetworkInterfaces[index].Flags = ensureSlice(normalized.NetworkInterfaces[index].Flags)
-	}
-	for index := range normalized.Processes {
-		normalized.Processes[index].CommandLine = ensureSlice(normalized.Processes[index].CommandLine)
-		normalized.Processes[index].Cgroups = ensureSlice(normalized.Processes[index].Cgroups)
-	}
-	for index := range normalized.Sockets {
-		normalized.Sockets[index].PIDs = ensureSlice(normalized.Sockets[index].PIDs)
-		normalized.Sockets[index].ProcessIDs = ensureSlice(normalized.Sockets[index].ProcessIDs)
-	}
-	for index := range normalized.CollectorStatus {
-		normalized.CollectorStatus[index].Errors = ensureSlice(normalized.CollectorStatus[index].Errors)
-	}
-	type snapshotAlias Snapshot
-	return json.Marshal(snapshotAlias(normalized))
 }
 
 // ensureSlice 将 nil 集合转换为空集合，同时保留非 nil 切片。

@@ -23,8 +23,8 @@ func TestDetectReportsPresentAndMissingLinuxCapabilities(t *testing.T) {
 
 	report := Detect(context.Background(), platform.NewRoot(rootPath), "amd64")
 
-	if report.SchemaVersion != model.SchemaVersion {
-		t.Fatalf("schema = %q, want %q", report.SchemaVersion, model.SchemaVersion)
+	if report.SchemaVersion != model.DoctorSchemaVersion {
+		t.Fatalf("schema = %q, want %q", report.SchemaVersion, model.DoctorSchemaVersion)
 	}
 	if report.OS != "linux" || report.Distribution != "Ubuntu 24.04 LTS" {
 		t.Fatalf("OS/distribution = %q/%q", report.OS, report.Distribution)
