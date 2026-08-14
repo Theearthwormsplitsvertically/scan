@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组件与容器采集模块设计</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #59636e;
+    --border: #d1d9e0;
+    --bg: #ffffff;
+    --code-bg: #f6f8fa;
+    --accent: #0969da;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #f6f8fa;
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 40px 80px;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.9em;
+    margin: 0 0 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  h2 {
+    font-size: 1.35em;
+    margin: 36px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1em;
+    margin: 24px 0 8px;
+  }
+  p { margin: 10px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9em;
+    background: var(--code-bg);
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 1px solid #e5e9ee;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    line-height: 1.55;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f0f3f6;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tr:nth-child(even) td { background: #fafbfc; }
+  blockquote {
+    margin: 14px 0;
+    padding: 8px 16px;
+    border-left: 4px solid #a9b6c2;
+    background: #f6f8fa;
+    color: var(--muted);
+  }
+  blockquote p { margin: 6px 0; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+  .tag {
+    display: inline-block;
+    font-size: 0.75em;
+    background: #fff8c5;
+    color: #7a5d00;
+    border: 1px solid #e8dda0;
+    border-radius: 10px;
+    padding: 1px 9px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>组件与容器采集模块设计 <span class="tag">融合设计稿 · 未实现</span></h1>
+
+<blockquote>
+<p>状态：融合设计稿（未实现，2026-08-14 更新）。本文档以当前已经落地的动态注册表、跨平台 Provider、Nmap 风格命令、依赖编排和批次协议 2.0 为内核，补充「服务 / 包 / 容器 / 文件 / 组件 / 应用」能力，遵循同一套模块化、故障隔离、证据链与稳定标识原则。</p>
+<p>已实现模块（<code>host</code>、<code>network</code>、<code>process</code>、<code>port</code>、<code>connection</code>）继续作为兼容基线；本文新增的 <code>service</code>、<code>package</code>、<code>container</code>、<code>file</code>、<code>component</code>、<code>application</code> 均属后续阶段，当前协议不为其输出伪空字段。实施新增模块前，只需补齐本文明确要求的“软依赖自动编排但不阻断”语义，不重写 CLI、Provider、统一模型或报告层。</p>
+<p><strong>范围说明</strong>：本文不是扫描器全部模块的总规格。总体路线中的 <code>resource</code>（10 分钟）、<code>filesystem</code>、<code>disk</code>、常驻调度、消费确认和保留清理仍按扫描器总体设计独立实施；本文列出的周期是模块元数据和外部调度建议，当前扫描器不会自行常驻定时执行。</p>
+</blockquote>
+
+<h2>1. 目标</h2>
+<p>在现有「主机 → 网络 → 进程 → 端口 → 连接」事实链之上，继续向上采集并推导：</p>
+<ul>
+<li>服务器运行了哪些<strong>操作系统服务</strong>（通用服务身份、状态、主进程、启动入口、运行用户；Linux 首版由 systemd Provider 实现）；</li>
+<li>安装了哪些<strong>软件包</strong>（名称、版本、架构、来源）；</li>
+<li>运行了哪些 <strong>Docker / containerd 容器</strong>（镜像、状态、端口映射、挂载、命名空间）；</li>
+<li>哪些<strong>运行文件、动态库、配置</strong>参与了这些进程和服务；</li>
+<li>由上述事实推导出<strong>组件 / 框架 / 运行时 / 库 / 插件</strong>及其<strong>版本</strong>；</li>
+<li>最终聚合为可部署的<strong>应用 / 业务实例</strong>。</li>
+</ul>
+<p>最终产物与既有批次一致：统一 <code>AssetRecord</code> / <code>RelationshipRecord</code>，带 <code>scope_id</code>、<code>states</code>、<code>confidence</code>、<code>evidence</code>，供 CMDB 做漏洞匹配、资产治理与影响分析。</p>
+
+<h2>2. 核心原则</h2>
+
+<h3>2.1 一个采集域 = 一个模块 = 一条命令</h3>
+<p>每个有独立资产语义、数据源或性能成本的功能都是独立模块，拥有：</p>
+<pre><code>命令、输出 record_type、数据源、依赖、降级行为、测试</code></pre>
+<p>新增模块实现 <code>Descriptor()/Probe()/Collect()</code> 并注册一行后，自动获得 CLI 参数、进入 <code>scan</code> 全量计划并复用批次输出。除一次性完善软依赖计划语义外，不增加 CLI 模块名分支，不让业务模块直接依赖 Linux 实现。</p>
+
+<h3>2.2 事实型模块与推导型模块分离</h3>
+<table>
+<tr><th>类别</th><th>模块</th><th>特征</th><th>结论置信度</th></tr>
+<tr><td>事实型</td><td><code>service</code>、<code>package</code>、<code>container</code>、<code>file</code></td><td>数据源单一确定，直接读取</td><td>通常 <code>exact</code> / <code>strong</code></td></tr>
+<tr><td>推导型</td><td><code>component</code>、<code>application</code></td><td>依赖规则库聚合、识别</td><td><code>exact</code> / <code>strong</code> / <code>inferred</code>，必须显式标注</td></tr>
+</table>
+<p>事实型模块只输出可验证的观测事实；推导型模块基于事实和规则输出结论。证据不足时保留原始事实并在模块状态、Coverage 或错误中记录未匹配数量；只有存在稳定作用域和可追溯证据组合时才创建 <code>unknown_component</code>/<code>unknown_application</code>，<strong>不得静默遗漏、批量制造伪未知资产，或仅凭进程名/端口号强行归类</strong>。</p>
+
+<h3>2.3 证据链：结论必须能追溯到证据</h3>
+<pre><code>IP 地址
+  ↓ network
+监听端口和连接
+  ↓ socket inode + /proc/&lt;pid&gt;/fd
+进程与稳定进程身份
+  ↓ systemd MainPID / Cgroup
+操作系统服务
+  ↓ 容器运行时元数据 / 命名空间
+容器
+  ↓ 包数据库 + 运行文件 + 清单
+软件包 / 文件 / 组件（版本、框架、库、插件）
+  ↓ 聚合规则 + 直接证据
+可部署应用 / 业务实例</code></pre>
+<p>只有直接证据才能标 <code>exact</code>。每一条 <code>AssetRecord</code> 与 <code>RelationshipRecord</code> 都必须携带 <code>evidence</code>（<code>provider</code>、<code>source_type</code>、<code>locator</code>/<code>locator_hash</code>、<code>observed_at</code>、<code>confidence</code>）。</p>
+
+<h3>2.4 容器是作用域，不是第二套进程模块</h3>
+<p>容器内进程仍由 <code>process</code> 统一采集，用关系 <code>process → runs_in → container</code> 关联，<strong>不复制第二套进程采集，也不由 container 模块重写 process 记录</strong>。进程记录继续使用宿主机作用域和稳定进程 ID；容器归属由 <code>runs_in</code> 表达。文件、包、组件等真正位于容器文件系统内的记录，使用 <code>scope_id</code> + <code>scope_type</code> 标记容器作用域。</p>
+
+<h3>2.5 稳定 ID：可变字段不进 ID</h3>
+<p><code>record_id</code> 只由不可变/稳定的键生成。版本、状态、端口、哈希等会变化的字段一律放 <code>attributes</code>，否则每次升级都会生成新资产、破坏 CMDB 的「同一资产生命周期」判断。</p>
+
+<h3>2.6 故障隔离：依赖用于补证据，不用于放大故障</h3>
+<ul>
+<li><strong>硬依赖</strong>：自动进入执行计划；缺失后目标模块无法形成最基本的稳定身份或任何可信结果，失败时可以阻断目标模块。</li>
+<li><strong>软依赖</strong>：同样自动进入本次执行计划并去重；失败时目标模块仍消费其它可用事实继续执行，结果降为 <code>partial</code>/<code>degraded</code>、<code>authoritative=false</code>，不得整链阻断。</li>
+<li><strong>Provider 能力</strong>：例如 <code>socket</code> 是底层能力，不是模块名；模块依赖只能引用注册表中的真实模块，例如 <code>port</code>。</li>
+</ul>
+<p>当前执行器只会自动规划硬依赖，软依赖仅在已经执行时传入。实施本文新增模块前必须先补齐上述软依赖计划语义及测试。人工执行模块命令时依赖使用本次新鲜事实；周期调度器应合并同一时点到期模块，使同一数据源在一个批次内只采一次。</p>
+
+<h2>3. 模块总览</h2>
+<table>
+<tr><th>模块</th><th>命令</th><th>采集内容</th><th>硬依赖</th><th>软依赖</th><th>默认周期</th><th>资源</th><th>超时</th><th>record_types</th><th>类型</th></tr>
+<tr><td><code>service</code></td><td><code>-service</code></td><td>通用服务身份、状态、主进程、启动入口、运行用户</td><td><code>host</code></td><td><code>process</code></td><td>12h</td><td>medium</td><td>2m</td><td><code>service</code></td><td>事实型</td></tr>
+<tr><td><code>package</code></td><td><code>-package</code></td><td>宿主机及可访问容器内已安装软件包、版本、架构、来源</td><td><code>host</code></td><td><code>container</code></td><td>24h</td><td>light</td><td>2m</td><td><code>package</code></td><td>事实型</td></tr>
+<tr><td><code>container</code></td><td><code>-container</code></td><td>容器、镜像、端口映射、挂载、命名空间</td><td><code>host</code></td><td><code>process</code>、<code>port</code></td><td>12h</td><td>medium</td><td>2m</td><td><code>container</code>、<code>container_image</code></td><td>事实型</td></tr>
+<tr><td><code>file</code></td><td><code>-file</code></td><td>运行文件、动态库、配置、权限、SHA256</td><td><code>process</code></td><td><code>service</code>、<code>container</code></td><td>24h</td><td>heavy</td><td>5m</td><td><code>file</code></td><td>事实型</td></tr>
+<tr><td><code>component</code></td><td><code>-component</code></td><td>软件/运行时/框架/库/插件 + 版本 + purl/cpe</td><td><code>host</code></td><td><code>package</code>、<code>service</code>、<code>process</code>、<code>file</code>、<code>container</code></td><td>24h</td><td>heavy</td><td>5m</td><td><code>component</code></td><td>推导型</td></tr>
+<tr><td><code>application</code></td><td><code>-application</code></td><td>聚合为可部署应用/业务实例</td><td><code>host</code></td><td><code>component</code>、<code>service</code>、<code>container</code>、<code>process</code>、<code>port</code></td><td>24h</td><td>heavy</td><td>5m</td><td><code>application</code></td><td>推导型</td></tr>
+</table>
+<p>模块参数由注册表动态生成：注册后自动获得 <code>-&lt;module&gt;</code> 参数并进入全量 <code>scan</code>，无需修改 CLI 的模块名列表。</p>
+
+<h2>4. 依赖图</h2>
+<p>箭头方向统一为“目标模块 → 依赖模块”；实线为硬依赖，虚线为失败不阻断的软依赖：</p>
+<pre><code>network ───────→ host
+process ───────→ host
+port ──────────→ process ─────→ host             ← 已有
+connection ────→ port
+
+package ───────→ host   ······→ container
+service ───────→ host   ······→ process
+container ─────→ host   ······→ process + port
+file ──────────→ process ·····→ service + container
+component ─────→ host   ······→ package + service + process + file + container
+application ───→ host   ······→ component + service + container + process + port</code></pre>
+<ul>
+<li><code>service</code> 使用 <code>process</code> 的进程事实把 Unit 的 MainPID 精确关联到进程；</li>
+<li><code>container</code> 使用 <code>process</code> 的 PID 命名空间/Cgroup 判定「进程在哪个容器里」；</li>
+<li><code>file</code> 从 <code>process</code> 的 exe/cwd/root/maps 证据链枚举文件，不遍历全盘；</li>
+<li><code>component</code> 与 <code>application</code> 是纯推导层，消费依赖模块的 <code>Internal</code> 强类型事实，不新增 Provider。</li>
+<li>任何软依赖失败都只降低结果完整性；只要存在可验证事实，目标模块继续输出，不允许因一条证据链断裂而清空其它成功结果。</li>
+</ul>
+
+<h2>5. 命令设计</h2>
+<p>与现有 CLI 完全一致：</p>
+<pre><code># 单模块
+sudo asset-agent -service
+sudo asset-agent -package
+sudo asset-agent -container
+sudo asset-agent -component
+sudo asset-agent -application
+
+# 组合（依赖自动编排，数据源只采一次）
+sudo asset-agent -service -package
+sudo asset-agent -container -service -port
+
+# 全量（动态包含全部已注册模块）
+sudo asset-agent scan</code></pre>
+<p>硬依赖和软依赖均自动编排且在本批次去重；软依赖失败不阻断目标模块。依赖模块照例执行但只发布用户选择模块的记录，其状态仍写入 <code>manifest.json</code>。<code>socket</code> 不是用户命令，不能写入模块依赖或出现 <code>-socket</code>。</p>
+
+<h2>6. 公共对象模型</h2>
+<p>新增模块复用 <code>internal/model/batch.go</code> 的统一模型，不引入新的顶层结构。</p>
+
+<h3>6.1 AssetRecord（不变）</h3>
+<pre><code>{
+  "record_id": "stable-id",
+  "record_type": "component",
+  "host_id": "host-id",
+  "scope_id": "host-id",
+  "scope_type": "host",
+  "name": "nginx",
+  "version": "1.24.0",
+  "vendor": "nginx.org",
+  "platform": "linux",
+  "states": {"installed": true, "running": true, "loaded": true, "exposed": false},
+  "first_observed_at": "...",
+  "last_observed_at": "...",
+  "confidence": "exact",
+  "attributes": {},
+  "evidence": []
+}</code></pre>
+<ul>
+<li><code>scope_type</code>：宿主记录为 <code>host</code>；容器内记录为 <code>container</code>，<code>scope_id</code> 为 <code>container:&lt;id&gt;</code>。</li>
+<li><code>states</code> 四个位必须分别表达：<code>installed</code>（已安装）、<code>running</code>（正在运行）、<code>loaded</code>（已加载）、<code>exposed</code>（存在暴露证据）。已安装但未运行的包/服务/组件仍是漏洞排查对象。</li>
+<li>每个模块的具体字段写入 <code>attributes</code>；<code>version</code>、<code>vendor</code> 是顶层字段，包/组件/容器/服务优先使用。</li>
+</ul>
+
+<h3>6.2 RelationshipRecord 与 Evidence（不变）</h3>
+<p>沿用现有 <code>RelationshipRecord</code>（<code>record_id</code>、<code>relationship_type</code>、<code>from_id</code>、<code>to_id</code>、<code>observed_at</code>、<code>confidence</code>、<code>evidence</code>）与 <code>Evidence</code>（<code>provider</code>、<code>source_type</code>、<code>locator</code>、<code>locator_hash</code>、<code>observed_at</code>、<code>digest</code>、<code>confidence</code>）。</p>
+
+<h2>7. 各模块详细设计</h2>
+
+<h3>7.1 service（事实型）</h3>
+<ul>
+<li><strong>Provider 契约</strong>：<code>ServiceProvider</code>，能力名 <code>service</code>。</li>
+<li><strong>通用契约</strong>：模块只认识服务身份、状态、主进程、启动入口和运行身份，不认识 systemd、Windows SCM 或 launchd 的具体调用方式。</li>
+<li><strong>Linux 首版数据源</strong>：systemd D-Bus（org.freedesktop.systemd1）优先；不可用时降级读取 <code>/etc/systemd/system</code>、<code>/lib/systemd/system</code> 的 Unit 文件。未来由 Windows/macOS Provider 映射同一通用事实。</li>
+<li><strong>依赖</strong>：硬依赖 <code>host</code> 形成稳定归属；软依赖 <code>process</code>，用于 MainPID → 进程记录精确关联。进程采集失败不得阻止服务事实输出。</li>
+<li><strong>record_type</strong>：<code>service</code>。</li>
+</ul>
+<p><code>attributes</code>：</p>
+<pre><code>unit_name、unit_state（active/inactive/failed...）、
+main_pid、exec_start、user、group、
+load_state、fragment_path、description、
+enabled_state（enabled/disabled/static，可选）</code></pre>
+<p><code>states</code>：<code>installed</code>（Unit 存在）、<code>running</code>（active）、<code>loaded</code>（已加载）。</p>
+<p>关系：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>语义</th><th>置信度</th></tr>
+<tr><td><code>runs_as</code></td><td>service → process</td><td>Unit 的 MainPID 对应进程</td><td><code>exact</code>（MainPID + /proc/&lt;pid&gt; 直接证据）</td></tr>
+</table>
+<p><strong>降级行为</strong>：D-Bus 不可用时读 Unit 文件 → 状态降为 <code>partial</code>，MainPID 无法解析时 <code>runs_as</code> 关系缺失，service 记录保留 <code>installed/loaded</code> 事实并标注 <code>partial</code>。</p>
+
+<h3>7.2 package（事实型）</h3>
+<ul>
+<li><strong>Provider 契约</strong>：<code>PackageProvider</code>，能力名 <code>package</code>。</li>
+<li><strong>数据源</strong>：Provider 按平台选择包数据库；Linux 首版支持 dpkg（<code>/var/lib/dpkg/status</code>）、rpm 数据库或 apk（<code>/lib/apk/db</code>）。读取时优先走只读数据库解析器，不执行包管理器命令；无法安全解析的 rpmdb 格式必须明确标记 <code>unsupported</code>，不得猜测。</li>
+<li><strong>依赖</strong>：硬依赖 <code>host</code>（稳定主机 ID）；软依赖 <code>container</code>，用于沿运行时确认的 rootfs 读取容器内包数据库。容器来源失败不得影响宿主机软件包结果。</li>
+<li><strong>record_type</strong>：<code>package</code>。</li>
+</ul>
+<p>顶层字段：<code>name</code>=包名、<code>version</code>=版本、<code>vendor</code>=维护者/厂商。</p>
+<p><code>attributes</code>：</p>
+<pre><code>architecture、package_source（dpkg/rpm/apk）、
+description、installed_size_bytes（可选）</code></pre>
+<p><code>states</code>：<code>installed=true</code>，<code>running/loaded/exposed=false</code>（包本身不表达运行状态）。</p>
+<p>关系：不额外生成（<code>host_id</code> 已表达归属）。</p>
+<p><strong>降级行为</strong>：某种包库缺失时仅记录该来源缺失，其余来源正常；全部缺失 → <code>unsupported</code>。</p>
+
+<h3>7.3 container（事实型）</h3>
+<ul>
+<li><strong>Provider 契约</strong>：<code>ContainerProvider</code>，能力名 <code>container</code>。运行时元数据由 Provider 采集；宿主端口监听验证消费 <code>port</code> 模块结果，不把 <code>socket</code> Provider 能力伪装成模块。</li>
+<li><strong>数据源</strong>：Docker Engine API（Linux 首版通常为 <code>/var/run/docker.sock</code>）、containerd/CRI；所有受支持的运行时端点均不可用时标 <code>unsupported</code>。</li>
+<li><strong>依赖</strong>：硬依赖 <code>host</code> 形成稳定归属；软依赖 <code>process</code>（命名空间/Cgroup 归属）与 <code>port</code>（宿主端口监听校验）。进程或端口采集失败时仍输出运行时 API 能确认的容器与镜像。</li>
+<li><strong>record_type</strong>：<code>container</code>、<code>container_image</code>。</li>
+</ul>
+<p><code>container</code> 顶层：<code>name</code>=容器名，<code>attributes</code>：</p>
+<pre><code>runtime、container_id（短 ID，仅展示）、
+image_id、image_name、image_tag、
+state（running/exited/...）、
+ports（[{container_port, protocol, host_ip, host_port}]）、
+mounts（[{source, destination, mode}]）、
+network_namespace、pid_namespace、cgroup、
+labels（脱敏后的关键标签）、restart_policy</code></pre>
+<p><code>container_image</code>：<code>name</code>=镜像名，<code>attributes</code>：</p>
+<pre><code>image_id、repo_digest、size_bytes、created_at、labels</code></pre>
+<p><code>states</code>：<code>running</code>（容器运行）、<code>loaded</code>（镜像已加载）、<code>exposed</code>（存在端口映射）。</p>
+<p>关系：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>语义</th><th>置信度</th></tr>
+<tr><td><code>runs_in</code></td><td>process → container</td><td>进程运行在容器内</td><td><code>exact</code>（PID ns / cgroup 直接证据）</td></tr>
+<tr><td><code>based_on</code></td><td>container → container_image</td><td>容器由镜像实例化</td><td><code>exact</code></td></tr>
+<tr><td><code>runs_on</code></td><td>container → host</td><td>容器运行在主机上</td><td><code>exact</code></td></tr>
+</table>
+<p><strong>降级行为</strong>：Docker socket 存在但无法访问 → <code>degraded</code>（仅报运行时探测失败）；containerd 存在但 Docker 缺失 → 输出 containerd 源；全部缺失 → <code>unsupported</code>。</p>
+<p><strong>边界</strong>：首版从宿主机读取容器元数据与 rootfs，暂不进入容器网络命名空间抓取容器内 socket。rootfs 位置必须由运行时 API、快照器或挂载元数据解析，不把 <code>/var/lib/docker/overlay2</code> 等实现路径写死在业务模块；容器内文件读取遵守与宿主机相同的白名单边界。</p>
+
+<h3>7.4 file（事实型）</h3>
+<ul>
+<li><strong>Provider 契约</strong>：<code>FileEvidenceProvider</code>，能力名 <code>file</code>。</li>
+<li><strong>数据源</strong>：<code>/proc/&lt;pid&gt;/{exe,cwd,root}</code>、<code>/proc/&lt;pid&gt;/maps</code>（动态库）、服务 ExecStart、组件清单指向的配置文件。<strong>只沿证据链读取，不遍历全盘</strong>。</li>
+<li><strong>依赖</strong>：硬依赖 <code>process</code>；软依赖 <code>service</code>、<code>container</code>，用于补充启动入口和容器 rootfs 证据。软依赖失败不阻止沿进程证据链读取。</li>
+<li><strong>record_type</strong>：<code>file</code>。</li>
+</ul>
+<p>顶层：<code>name</code>=归一化相对路径（相对 host 或容器 rootfs），<code>attributes</code>：</p>
+<pre><code>absolute_path、sha256、mode、owner_uid、owner_gid、
+size_bytes、mtime、file_kind（executable/shared_library/config/data）</code></pre>
+<p><code>states</code>：<code>installed=true</code>、<code>loaded=true</code>（若被某进程加载）。</p>
+<p>关系：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>语义</th><th>置信度</th></tr>
+<tr><td><code>loaded_by</code></td><td>file → process</td><td>文件被进程加载</td><td><code>exact</code>（/proc/&lt;pid&gt;/maps 直接证据）</td></tr>
+</table>
+<p><strong>降级行为</strong>：单个文件读取失败（权限/已删除）→ 记录缺失但保留其它文件，<code>partial</code>；敏感路径（私钥、Token、配置原文）只输出 <code>locator_hash</code>，不输出内容。</p>
+<p><strong>性能边界</strong>：SHA256 按 <code>size + mtime</code> 缓存，未变化不重算。</p>
+
+<h3>7.5 component（推导型）</h3>
+<ul>
+<li><strong>数据来源</strong>：硬依赖 <code>host</code> 建立稳定作用域；以 <code>package</code>、<code>service</code>、<code>process</code>、<code>file</code>、<code>container</code> 为软依赖，消费其中成功模块的 <code>Internal</code>，通过<strong>识别规则库</strong>推导组件。任一来源失败只降低覆盖率，不阻断其它来源。</li>
+<li><strong>无新 Provider</strong>：是纯推导模块。</li>
+<li><strong>record_type</strong>：<code>component</code>。</li>
+</ul>
+<p>顶层：<code>name</code>=组件名、<code>version</code>=版本、<code>vendor</code>=厂商。</p>
+<p><code>attributes</code>：</p>
+<pre><code>ecosystem、purl、cpe、
+package_source、artifact_digest、
+detected_by（规则名）、version_source（包库/清单/banner/名称）</code></pre>
+<p><code>states</code>：<code>installed</code>（来自包/文件）、<code>running</code>（来自进程/服务）、<code>loaded</code>（来自动态库/清单）。</p>
+<p>关系：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>语义</th><th>置信度</th></tr>
+<tr><td><code>provided_by</code></td><td>component → package</td><td>组件由软件包提供</td><td><code>exact</code>/<code>strong</code></td></tr>
+<tr><td><code>consists_of</code></td><td>component → file</td><td>组件由文件构成</td><td><code>strong</code>/<code>inferred</code></td></tr>
+<tr><td><code>uses_component</code></td><td>process → component</td><td>进程执行或加载该组件</td><td><code>exact</code>/<code>strong</code>/<code>inferred</code></td></tr>
+</table>
+<p>service → component 的关系不重复采集，由 CMDB 沿 <code>service →runs_as→ process →uses_component→ component</code> 推导。</p>
+<p><strong>降级行为</strong>：规则库缺失 → 模块 <code>degraded</code> 且不输出推导资产；规则无匹配 → 保留原始事实并记录 <code>unmatched_count</code>，不默认给每个进程制造 <code>unknown_component</code>。只有具备稳定作用域和至少一条可追溯组件证据、但名称仍无法归类时才输出稳定的未知组件。版本无法确定时 <code>confidence=inferred</code> 且 <code>version</code> 留空，不作为漏洞匹配唯一依据。</p>
+
+<h3>7.6 application（推导型）</h3>
+<ul>
+<li><strong>数据来源</strong>：硬依赖 <code>host</code> 建立稳定作用域；以 <code>component</code>、<code>service</code>、<code>container</code>、<code>process</code>、<code>port</code> 为软依赖，消费成功模块的 <code>Internal</code> 并按聚合规则归并。单一来源失败只降低置信度和覆盖率。</li>
+<li><strong>无新 Provider</strong>：纯聚合模块。</li>
+<li><strong>record_type</strong>：<code>application</code>。</li>
+</ul>
+<p>顶层：<code>name</code>=应用/部署名，<code>attributes</code>：</p>
+<pre><code>deployment_name、namespace、environment（生产/测试/UAT，可选）、
+service_units、container_names、component_names、exposed_ports</code></pre>
+<p><code>states</code>：<code>running</code>（任一进程/服务/容器在运行）、<code>exposed</code>（存在监听/端口映射）。</p>
+<p>关系：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>语义</th><th>置信度</th></tr>
+<tr><td><code>consists_of</code></td><td>application → component</td><td>应用由组件构成</td><td><code>strong</code></td></tr>
+<tr><td><code>deployed_as</code></td><td>application → service</td><td>应用以服务方式部署</td><td><code>exact</code></td></tr>
+<tr><td><code>runs_in</code></td><td>application → container</td><td>应用运行在容器内</td><td><code>exact</code></td></tr>
+</table>
+<p><strong>降级行为</strong>：聚合证据不足时保留已确认的组件、服务、容器、进程和端口事实，并记录未归属数量；只有存在稳定部署边界（例如 Unit、容器/编排标签、部署目录或用户资产标签）时才输出 <code>unknown_application</code>，不得仅凭进程名强行归类。</p>
+
+<h2>8. 关系类型总表</h2>
+<p>已有 + 新增的统一关系词汇（方向为 from → to）：</p>
+<table>
+<tr><th>关系类型</th><th>方向</th><th>产出模块</th><th>状态</th></tr>
+<tr><td><code>assigned_to</code></td><td>address → interface</td><td>network</td><td>已有</td></tr>
+<tr><td><code>uses_interface</code></td><td>route → interface</td><td>network</td><td>已有</td></tr>
+<tr><td><code>child_of</code></td><td>process → process</td><td>process</td><td>已有</td></tr>
+<tr><td><code>listens_on</code></td><td>process → port</td><td>port</td><td>已有</td></tr>
+<tr><td><code>connects_to</code></td><td>process → connection</td><td>connection</td><td>已有</td></tr>
+<tr><td><code>runs_as</code></td><td>service → process</td><td>service</td><td>新增</td></tr>
+<tr><td><code>runs_in</code></td><td>process → container</td><td>container</td><td>新增</td></tr>
+<tr><td><code>based_on</code></td><td>container → image</td><td>container</td><td>新增</td></tr>
+<tr><td><code>runs_on</code></td><td>container → host</td><td>container</td><td>新增</td></tr>
+<tr><td><code>loaded_by</code></td><td>file → process</td><td>file</td><td>新增</td></tr>
+<tr><td><code>provided_by</code></td><td>component → package</td><td>component</td><td>新增</td></tr>
+<tr><td><code>consists_of</code></td><td>component/application → file/component</td><td>component、application</td><td>新增</td></tr>
+<tr><td><code>uses_component</code></td><td>process → component</td><td>component</td><td>新增</td></tr>
+<tr><td><code>deployed_as</code></td><td>application → service</td><td>application</td><td>新增</td></tr>
+</table>
+<p>可派生关系（不重复采集，由 CMDB 沿图推导）：<code>service → port</code>（经 <code>runs_as</code> + <code>listens_on</code>）、<code>application → port</code>、<code>component → port</code>。</p>
+
+<h2>9. 稳定 ID 约定</h2>
+<p><code>record_id</code> 统一用 <code>StableRecordID(recordType, parts...)</code> 生成，parts 只含稳定键：</p>
+<table>
+<tr><th>类型</th><th>稳定键</th><th>明确不进 ID 的字段</th></tr>
+<tr><td>host</td><td>DMI UUID（回退 hostname）</td><td>—</td></tr>
+<tr><td>process</td><td><code>boot_id:pid:starttime</code></td><td>—</td></tr>
+<tr><td>service</td><td>host + service_manager + native_service_key（Linux 为 unit_name）</td><td>状态、MainPID、显示名</td></tr>
+<tr><td>package</td><td>host + 架构 + 包名</td><td>版本</td></tr>
+<tr><td>container</td><td>host + runtime + container_id</td><td>容器名、状态</td></tr>
+<tr><td>container_image</td><td>host + runtime + image_id/repo_digest</td><td>tag、size、loaded 状态</td></tr>
+<tr><td>file</td><td>scope + 归一化相对路径</td><td>sha256、mtime</td></tr>
+<tr><td>component</td><td>scope + ecosystem + 名称</td><td>版本、purl 里的版本段</td></tr>
+<tr><td>application</td><td>scope + 部署名 + 命名空间</td><td>端口、组件清单</td></tr>
+</table>
+<p><strong>铁律</strong>：版本、状态、端口、哈希等可变字段只入 <code>attributes</code>，绝不入 <code>record_id</code>。</p>
+
+<h2>10. 证据等级与版本提取</h2>
+<p><code>confidence</code> 统一为 <code>exact</code>、<code>strong</code>、<code>inferred</code>、<code>unknown</code>：</p>
+<pre><code>exact    包库条目、systemd ExecStart 指向的二进制、清单内直接版本号
+strong   版本文件直接读出（java release、package.json、go buildinfo、Ruby gemspec）
+inferred 进程名/端口/路径名推定（如 "java" 进程 → JVM 存在，版本未知）
+unknown  无任何可验证证据</code></pre>
+<p>版本提取可靠性：<strong>包数据库 &gt; 版本文件/清单 &gt; 运行时指纹(banner/cmdline) &gt; 名称推断</strong>。<code>inferred</code>/<code>unknown</code> 不能覆盖 <code>exact</code>，也不能作为漏洞匹配的唯一依据。</p>
+
+<h2>11. 容器 scope 设计</h2>
+<ul>
+<li>容器内进程由 <code>process</code> 统一采集并保持宿主机作用域；<code>container</code> 根据 <code>/proc/&lt;pid&gt;/ns/pid</code>、cgroup 和运行时元数据补充 <code>runs_in</code> 关系，不复制或重写进程记录；</li>
+<li>容器内文件/包/组件记录使用 <code>scope_type="container"</code>、<code>scope_id="container:&lt;id&gt;"</code>；</li>
+<li>容器 rootfs 由 ContainerProvider 通过运行时 API、快照器或挂载元数据定位；业务模块不固定 Docker 数据目录或存储驱动路径，并遵守与宿主机相同的白名单边界，<strong>不因能访问容器 rootfs 而扩大读取范围</strong>；</li>
+<li>首版不进入容器 netns 抓取容器内 socket；容器暴露端口由运行时 API 的端口映射表达，宿主监听状态由 <code>port</code> 模块交叉验证。</li>
+</ul>
+
+<h2>12. 组件识别规则库</h2>
+<p>规则库与代码分离，内置一批可扩展规则（后续可外置为配置文件）：</p>
+<pre><code>- id: nginx
+  ecosystem: web-server
+  vendor: nginx.org
+  match:
+    package_names: ["nginx", "nginx-core"]
+    process_names: ["nginx"]
+    files: ["*/sbin/nginx", "*/nginx"]
+  version_from:            # 版本提取来源优先级
+    - {kind: package}
+    - {kind: file, glob: "*/nginx", regex: "nginx/([0-9.]+)"}
+    - {kind: banner, regex: "Server: nginx/([0-9.]+)"}
+  cpe_prefix: "cpe:2.3:a:nginx:nginx"</code></pre>
+<p>每条规则声明：<code>match</code>（包名/进程名/文件/端口特征）与 <code>version_from</code>（版本来源与正则）。采集器统一执行，缺证据时标 <code>inferred</code>。规则命中即产出 <code>component</code>；不命中则保留原始事实、不硬编码 <code>switch</code>。</p>
+
+<h2>13. 性能与安全边界</h2>
+<ul>
+<li>不执行 Shell；不读取 <code>/proc/&lt;pid&gt;/environ</code>；不读取私钥、Token、密码、配置原文；</li>
+<li>只沿进程/服务/容器/包/组件证据链读取文件，<strong>不遍历全盘</strong>；</li>
+<li>文件 SHA256 按 <code>size + mtime</code> 缓存，未变不重算；</li>
+<li>敏感路径只输出 <code>locator_hash</code>；</li>
+<li>重型模块（<code>file</code>、<code>component</code>、<code>application</code>）并发数保持 1，避免多模块同时遍历进程/容器；</li>
+<li>手工执行单模块时，本批次自动依赖只采一次；周期调度时合并同一时点到期模块，避免 <code>component</code>/<code>application</code> 重复触发相同事实源；</li>
+<li>模块周期只是调度建议：<code>service/container</code> 12h，<code>package/file/component/application</code> 24h；更高频的 <code>resource</code> 10 分钟、<code>port/connection</code> 1h、<code>network</code> 6h 按总体设计独立调度。</li>
+<li>脱敏在进入统一模型前完成（<code>security.RedactArgs</code> 等），输出层不承担首次脱敏责任。</li>
+</ul>
+
+<h2>14. 分阶段实现</h2>
+<pre><code>阶段1（已完成） host/network/process/port/connection + 内核
+阶段2  软依赖计划语义 + service + package ← 先保证故障隔离，再增加事实源
+阶段3  container                ← Docker/containerd，中等复杂度
+阶段4  file + component         ← 先补文件证据，再实现规则推导
+阶段5  application              ← 聚合，依赖前面全部，最后做</code></pre>
+<p>建议先落地 <strong>service + package</strong>：数据源单一、结论可靠，能立刻给 CMDB 带来「服务清单 + 软件清单」两大价值，也最容易验证模块化扩展路径。</p>
+
+<h2>15. 测试与验收</h2>
+<p>每个新模块必须覆盖：</p>
+<ol>
+<li>注册后自动获得 <code>-&lt;module&gt;</code> 参数并进入全量 <code>scan</code>；</li>
+<li>依赖编排正确：硬依赖与软依赖均自动进入计划并去重；软依赖失败时目标模块继续执行并降级，硬依赖失败时按约定阻断；</li>
+<li>单模块只发布目标模块记录，依赖模块状态写入 manifest；</li>
+<li>字段、<code>states</code>、<code>confidence</code>、<code>evidence</code> 与关系类型稳定；</li>
+<li>降级行为：数据源缺失 → <code>partial</code>/<code>unsupported</code>，不产生伪空记录；</li>
+<li>稳定 ID：版本/状态变化不改 <code>record_id</code>；</li>
+<li>容器 scope：进程保持宿主作用域且具有 <code>runs_in</code> 归属；容器内文件/包/组件的 <code>scope_type</code> 正确；</li>
+<li>规则库：命中、未命中、版本提取三种路径；未命中时不批量制造伪 unknown 资产；</li>
+<li>稳定 ID 隔离：不同主机出现相同 container/image ID 时不会碰撞；</li>
+<li>跨平台边界：业务模块测试使用通用 Provider 假实现，不直接导入 systemd、Docker 或 Linux 路径；</li>
+<li>安全边界：不读 environ、凭据脱敏、不遍历全盘；</li>
+<li>最终 <code>go fmt</code>、<code>go vet</code>、<code>go test ./... -count=1</code> 与 Linux 静态构建验证。</li>
+</ol>
+
+<h2>16. 与既有文档的关系</h2>
+<ul>
+<li><code>模块化扫描设计.md</code>：本表以其已经落地的注册表、Provider、命令和批次协议为基础，并要求在新增模块前补齐软依赖自动规划、失败不阻断语义；</li>
+<li><code>企业资产台账关系建模逻辑.md</code>：本表的 <code>component</code>/<code>application</code> 是资产节点中的「平台中间件」「业务应用」，关系与证据等级直接对应其「关系表」与「证据等级」；</li>
+<li><code>docs/代码阅读地图.md</code>：本表新增模块沿用其「collect → provider → modules → registry → agent → report」调用链，业务模块不直接导入 Linux 实现。</li>
+</ul>
+
+</main>
+</body>
+</html>
