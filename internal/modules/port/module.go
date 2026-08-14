@@ -32,7 +32,7 @@ func New() Collector { return Collector{} }
 func (Collector) Descriptor() coremodule.Descriptor {
 	return coremodule.Descriptor{
 		Name: "port", SchemaVersion: model.BatchSchemaVersion,
-		RecordTypes: []string{"port"}, Commands: coremodule.StandardCommands(),
+		RecordTypes:          []string{"port"},
 		RequiredCapabilities: []string{provider.CapabilitySocket}, OptionalCapabilities: []string{},
 		HardDependencies: []string{"process"}, SoftDependencies: []string{},
 		DefaultInterval: "1h", ResourceClass: "medium", Timeout: "2m",

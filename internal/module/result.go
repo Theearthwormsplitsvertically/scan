@@ -10,16 +10,6 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
-// StandardCommands 返回每个扫描模块共有的命令空间。
-func StandardCommands() []CommandDescriptor {
-	return []CommandDescriptor{
-		{Name: "scan", Description: "执行该模块扫描", Options: []string{"--output-dir", "-o"}},
-		{Name: "describe", Description: "显示模块描述", Options: []string{}},
-		{Name: "status", Description: "显示当前平台支持状态", Options: []string{}},
-		{Name: "schedule", Description: "显示默认扫描周期", Options: []string{}},
-	}
-}
-
 // StableRecordID 使用长度分隔的稳定键生成确定性记录 ID。
 func StableRecordID(recordType string, parts ...string) string {
 	hash := sha256.New()

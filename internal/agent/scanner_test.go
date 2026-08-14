@@ -276,7 +276,7 @@ func TestScannerDoctorAndModulesDegradeWithoutPlatformProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doctor.OS != "windows" || doctor.Root || doctor.Capabilities.Items == nil {
+	if doctor.SchemaVersion != model.DoctorSchemaVersion || doctor.OS != "windows" || doctor.Root || doctor.Capabilities.Items == nil {
 		t.Fatalf("doctor = %+v", doctor)
 	}
 	infos, err := scanner.Modules(context.Background())

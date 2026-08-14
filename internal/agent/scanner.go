@@ -51,7 +51,7 @@ func (scanner *Scanner) Doctor(ctx context.Context) (model.DoctorReport, error) 
 		platform = scanner.providers.Platform()
 	}
 	return model.DoctorReport{
-		SchemaVersion: model.SchemaVersion, Agent: scanner.agent, OS: platform, Root: false,
+		SchemaVersion: model.DoctorSchemaVersion, Agent: scanner.agent, OS: platform, Root: false,
 		Capabilities: model.CapabilityReport{Items: []model.Capability{}},
 		SystemProfile: model.SystemProfile{
 			OS: platform, SecurityModules: []string{}, ContainerRuntimes: []string{}, AvailableSources: map[string]bool{},
@@ -204,10 +204,6 @@ func constrainByDependencies(result coremodule.Result, descriptor coremodule.Des
 
 func normalizeDescriptor(descriptor coremodule.Descriptor) coremodule.Descriptor {
 	descriptor.RecordTypes = scannerNonNil(descriptor.RecordTypes)
-	descriptor.Commands = scannerNonNil(descriptor.Commands)
-	for index := range descriptor.Commands {
-		descriptor.Commands[index].Options = scannerNonNil(descriptor.Commands[index].Options)
-	}
 	descriptor.RequiredCapabilities = scannerNonNil(descriptor.RequiredCapabilities)
 	descriptor.OptionalCapabilities = scannerNonNil(descriptor.OptionalCapabilities)
 	descriptor.HardDependencies = scannerNonNil(descriptor.HardDependencies)

@@ -17,7 +17,7 @@ const smallFactLimit = 1 << 20
 // 缺失可选事实时返回能力降级，而不是让整个 doctor 失败。
 func Detect(ctx context.Context, root platform.Root, architecture string) model.DoctorReport {
 	report := model.DoctorReport{
-		SchemaVersion: model.SchemaVersion,
+		SchemaVersion: model.DoctorSchemaVersion,
 		Agent:         model.AgentInfo{Name: "asset-agent", Version: buildinfo.Version, Commit: buildinfo.Commit, BuildTime: buildinfo.BuildTime},
 		OS:            "linux", Architecture: architecture,
 		Capabilities:  model.CapabilityReport{Items: make([]model.Capability, 0, 16)},

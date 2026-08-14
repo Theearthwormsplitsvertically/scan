@@ -21,7 +21,7 @@ func New() Collector { return Collector{} }
 func (Collector) Descriptor() coremodule.Descriptor {
 	return coremodule.Descriptor{
 		Name: "host", SchemaVersion: model.BatchSchemaVersion,
-		RecordTypes: []string{"host"}, Commands: coremodule.StandardCommands(),
+		RecordTypes:          []string{"host"},
 		RequiredCapabilities: []string{provider.CapabilityHost}, OptionalCapabilities: []string{},
 		HardDependencies: []string{}, SoftDependencies: []string{},
 		DefaultInterval: "24h", ResourceClass: "light", Timeout: "15s",

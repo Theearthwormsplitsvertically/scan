@@ -8,27 +8,18 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/provider"
 )
 
-// CommandDescriptor 描述模块公开的一项命令及其参数。
-type CommandDescriptor struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Options     []string `json:"options"`
-}
-
-// Descriptor 声明模块身份、能力依赖、命令、周期和资源预算。
+// Descriptor 声明模块身份、能力依赖、周期和资源预算。
 type Descriptor struct {
-	Name                 string              `json:"name"`
-	SchemaVersion        string              `json:"schema_version"`
-	RecordTypes          []string            `json:"record_types"`
-	Commands             []CommandDescriptor `json:"commands"`
-	RequiredCapabilities []string            `json:"required_capabilities"`
-	OptionalCapabilities []string            `json:"optional_capabilities"`
-	HardDependencies     []string            `json:"hard_dependencies"`
-	SoftDependencies     []string            `json:"soft_dependencies"`
-	DefaultInterval      string              `json:"default_interval"`
-	ResourceClass        string              `json:"resource_class"`
-	Timeout              string              `json:"timeout"`
-	SupportsDelta        bool                `json:"supports_delta"`
+	Name                 string   `json:"name"`
+	SchemaVersion        string   `json:"schema_version"`
+	RecordTypes          []string `json:"record_types"`
+	RequiredCapabilities []string `json:"required_capabilities"`
+	OptionalCapabilities []string `json:"optional_capabilities"`
+	HardDependencies     []string `json:"hard_dependencies"`
+	SoftDependencies     []string `json:"soft_dependencies"`
+	DefaultInterval      string   `json:"default_interval"`
+	ResourceClass        string   `json:"resource_class"`
+	Timeout              string   `json:"timeout"`
 }
 
 // SupportResult 是模块对当前平台 Provider 集合的能力判断。

@@ -8,8 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 )
 
 func TestWriteJSONProducesReadableSingleDocument(t *testing.T) {
@@ -18,7 +16,7 @@ func TestWriteJSONProducesReadableSingleDocument(t *testing.T) {
 	value := struct {
 		SchemaVersion string `json:"schema_version"`
 		Detail        string `json:"detail"`
-	}{SchemaVersion: model.SchemaVersion, Detail: "load < 10% & healthy"}
+	}{SchemaVersion: "test", Detail: "load < 10% & healthy"}
 	var output bytes.Buffer
 
 	if err := WriteJSON(&output, value); err != nil {
@@ -34,8 +32,8 @@ func TestWriteJSONProducesReadableSingleDocument(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
 		t.Fatalf("output is not JSON: %v", err)
 	}
-	if decoded["schema_version"] != "1.0" {
-		t.Fatalf("schema_version = %v, want 1.0", decoded["schema_version"])
+	if decoded["schema_version"] != "test" {
+		t.Fatalf("schema_version = %v, want test", decoded["schema_version"])
 	}
 }
 
@@ -44,7 +42,9 @@ func TestWriteJSONFilePublishesCompleteFileWithoutTemporaryArtifacts(t *testing.
 
 	directory := t.TempDir()
 	path := filepath.Join(directory, "snapshot.json")
-	value := model.Snapshot{SchemaVersion: model.SchemaVersion}
+	value := struct {
+		SchemaVersion string `json:"schema_version"`
+	}{SchemaVersion: "test"}
 
 	if err := WriteJSONFile(path, value); err != nil {
 		t.Fatalf("WriteJSONFile() error = %v", err)
@@ -53,7 +53,7 @@ func TestWriteJSONFilePublishesCompleteFileWithoutTemporaryArtifacts(t *testing.
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if !bytes.Contains(content, []byte(`"schema_version":"1.0"`)) {
+	if !bytes.Contains(content, []byte(`"schema_version":"test"`)) {
 		t.Fatalf("content = %q, want schema", content)
 	}
 	entries, err := os.ReadDir(directory)
