@@ -245,6 +245,74 @@ func TestScannerDoesNotRunTargetAfterHardDependencyFailure(t *testing.T) {
 	}
 }
 
+func TestScannerSoftDependencyStatusDoesNotBlockTargetAndControlsAuthority(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		dependency model.Status
+		wantStatus model.Status
+		wantCode   string
+	}{
+		{name: "failed dependency", dependency: model.StatusFailed, wantStatus: model.StatusPartial, wantCode: "soft_dependency_unavailable"},
+		{name: "degraded dependency", dependency: model.StatusDegraded, wantStatus: model.StatusPartial, wantCode: "soft_dependency_partial"},
+		{name: "complete dependency", dependency: model.StatusComplete, wantStatus: model.StatusComplete},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			registry := coremodule.NewRegistry()
+			mustRegisterScannerModule(t, registry, scannerFakeModule{
+				descriptor: coremodule.Descriptor{Name: "package"},
+				collect: func(context.Context, provider.Lookup, coremodule.Request) coremodule.Result {
+					result := successfulFakeResult("package")
+					result.Data.Status = test.dependency
+					return result
+				},
+			})
+			targetCalled := false
+			mustRegisterScannerModule(t, registry, scannerFakeModule{
+				descriptor: coremodule.Descriptor{Name: "component", SoftDependencies: []string{"package"}},
+				collect: func(_ context.Context, _ provider.Lookup, request coremodule.Request) coremodule.Result {
+					targetCalled = true
+					if request.Dependencies["package"].Data.Status != test.dependency {
+						t.Fatalf("soft dependency = %+v", request.Dependencies["package"])
+					}
+					return successfulFakeResult("component")
+				},
+			})
+			providers, _ := provider.NewSet("linux")
+			outcome, err := NewScanner(registry, providers).Scan(context.Background(), ScanSelection{Modules: []string{"component"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !targetCalled {
+				t.Fatal("target did not run after soft dependency result")
+			}
+			if len(outcome.Batch.Results) != 2 {
+				t.Fatalf("results = %+v", outcome.Batch.Results)
+			}
+			dependencyResult := outcome.Batch.Results[0]
+			if dependencyResult.Module != "package" || dependencyResult.Published || len(dependencyResult.Records) != 0 {
+				t.Fatalf("published dependency = %+v", dependencyResult)
+			}
+			targetResult := outcome.Batch.Results[1]
+			if targetResult.Status != test.wantStatus {
+				t.Fatalf("target status = %q, want %q", targetResult.Status, test.wantStatus)
+			}
+			if test.wantCode == "" {
+				if !targetResult.Authoritative || len(targetResult.Errors) != 0 {
+					t.Fatalf("complete target = %+v", targetResult)
+				}
+				return
+			}
+			if targetResult.Authoritative || len(targetResult.Errors) != 1 || targetResult.Errors[0].Code != test.wantCode {
+				t.Fatalf("degraded target = %+v", targetResult)
+			}
+		})
+	}
+}
+
 func TestScannerEmptyNonLinuxProvidersReturnUnsupported(t *testing.T) {
 	t.Parallel()
 

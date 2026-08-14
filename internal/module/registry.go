@@ -76,7 +76,7 @@ func (registry *Registry) List() []Descriptor {
 	return descriptors
 }
 
-// PlanSelected 合并多个目标的硬依赖闭包，并返回依赖优先、同层名称有序的执行计划。
+// PlanSelected 合并多个目标的硬、软依赖闭包，并返回依赖优先、同层名称有序的执行计划。
 func (registry *Registry) PlanSelected(names []string) ([]Module, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("module registry is nil")
@@ -89,7 +89,7 @@ func (registry *Registry) PlanSelected(names []string) ([]Module, error) {
 		if _, ok := registry.modules[name]; !ok {
 			return nil, fmt.Errorf("module %q is not registered", name)
 		}
-		if err := registry.selectHardDependencies(name, selected); err != nil {
+		if err := registry.selectDependencies(name, selected); err != nil {
 			return nil, err
 		}
 	}
@@ -113,11 +113,15 @@ func (registry *Registry) plan(selected map[string]bool) ([]Module, error) {
 	dependents := make(map[string][]string, len(selected))
 	for name := range selected {
 		item := registry.modules[name]
+		descriptor := item.Descriptor()
+		if err := registry.validateDependencies(name, "hard", descriptor.HardDependencies); err != nil {
+			return nil, err
+		}
+		if err := registry.validateDependencies(name, "soft", descriptor.SoftDependencies); err != nil {
+			return nil, err
+		}
 		seenDependencies := make(map[string]bool)
-		for _, dependency := range item.Descriptor().HardDependencies {
-			if _, ok := registry.modules[dependency]; !ok {
-				return nil, fmt.Errorf("module %q has unknown hard dependency %q", name, dependency)
-			}
+		for _, dependency := range allDependencies(descriptor) {
 			if !selected[dependency] || seenDependencies[dependency] {
 				continue
 			}
@@ -150,23 +154,43 @@ func (registry *Registry) plan(selected map[string]bool) ([]Module, error) {
 		ready = next
 	}
 	if len(result) != len(selected) {
-		return nil, fmt.Errorf("module hard dependency cycle detected")
+		return nil, fmt.Errorf("module dependency cycle detected")
 	}
 	return result, nil
 }
 
-func (registry *Registry) selectHardDependencies(name string, selected map[string]bool) error {
+func (registry *Registry) selectDependencies(name string, selected map[string]bool) error {
 	if selected[name] {
 		return nil
 	}
 	selected[name] = true
-	for _, dependency := range registry.modules[name].Descriptor().HardDependencies {
-		if _, ok := registry.modules[dependency]; !ok {
-			return fmt.Errorf("module %q has unknown hard dependency %q", name, dependency)
-		}
-		if err := registry.selectHardDependencies(dependency, selected); err != nil {
+	descriptor := registry.modules[name].Descriptor()
+	if err := registry.validateDependencies(name, "hard", descriptor.HardDependencies); err != nil {
+		return err
+	}
+	if err := registry.validateDependencies(name, "soft", descriptor.SoftDependencies); err != nil {
+		return err
+	}
+	for _, dependency := range allDependencies(descriptor) {
+		if err := registry.selectDependencies(dependency, selected); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (registry *Registry) validateDependencies(moduleName, kind string, dependencies []string) error {
+	for _, dependency := range dependencies {
+		if _, ok := registry.modules[dependency]; !ok {
+			return fmt.Errorf("module %q has unknown %s dependency %q", moduleName, kind, dependency)
+		}
+	}
+	return nil
+}
+
+func allDependencies(descriptor Descriptor) []string {
+	result := make([]string, 0, len(descriptor.HardDependencies)+len(descriptor.SoftDependencies))
+	result = append(result, descriptor.HardDependencies...)
+	result = append(result, descriptor.SoftDependencies...)
+	return result
 }

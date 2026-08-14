@@ -199,6 +199,28 @@ func constrainByDependencies(result coremodule.Result, descriptor coremodule.Des
 			})
 		}
 	}
+	for _, name := range descriptor.SoftDependencies {
+		dependency, ok := dependencies[name]
+		if !ok {
+			result = constrainBySoftDependency(result, "soft_dependency_unavailable", "软依赖 "+name+" 结果缺失")
+			continue
+		}
+		switch dependency.Data.Status {
+		case model.StatusComplete:
+			continue
+		case model.StatusPartial, model.StatusDegraded:
+			result = constrainBySoftDependency(result, "soft_dependency_partial", "软依赖 "+name+" 结果不完整")
+		default:
+			result = constrainBySoftDependency(result, "soft_dependency_unavailable", "软依赖 "+name+" 不可用")
+		}
+	}
+	return result
+}
+
+func constrainBySoftDependency(result coremodule.Result, code, message string) coremodule.Result {
+	result.Data.Status = model.StatusPartial
+	result.Data.Authoritative = false
+	result.Data.Errors = append(result.Data.Errors, model.ErrorDetail{Code: code, Message: message})
 	return result
 }
 

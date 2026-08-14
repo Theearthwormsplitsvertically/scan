@@ -12,10 +12,11 @@ import (
 type fakeModule struct {
 	name string
 	hard []string
+	soft []string
 }
 
 func (item fakeModule) Descriptor() Descriptor {
-	return Descriptor{Name: item.name, HardDependencies: item.hard}
+	return Descriptor{Name: item.name, HardDependencies: item.hard, SoftDependencies: item.soft}
 }
 
 func (fakeModule) Probe(context.Context, provider.Lookup) SupportResult {
@@ -59,6 +60,46 @@ func TestRegistryPlansHardDependenciesOnce(t *testing.T) {
 	}
 	if got := names(plan); !reflect.DeepEqual(got, []string{"host", "process", "port"}) {
 		t.Fatalf("plan = %v", got)
+	}
+}
+
+func TestRegistryPlansSoftDependenciesBeforeTarget(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRegistry()
+	mustRegister(t, registry, fakeModule{name: "host"})
+	mustRegister(t, registry, fakeModule{name: "package", hard: []string{"host"}})
+	mustRegister(t, registry, fakeModule{name: "component", hard: []string{"host"}, soft: []string{"package", "host"}})
+
+	plan, err := registry.PlanSelected([]string{"component"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(plan); !reflect.DeepEqual(got, []string{"host", "package", "component"}) {
+		t.Fatalf("plan = %v", got)
+	}
+}
+
+func TestRegistryRejectsUnknownSoftDependency(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRegistry()
+	mustRegister(t, registry, fakeModule{name: "component", soft: []string{"package"}})
+	plan, err := registry.PlanSelected([]string{"component"})
+	if err == nil || plan != nil {
+		t.Fatalf("plan = %v, err = %v", names(plan), err)
+	}
+}
+
+func TestRegistryRejectsMixedDependencyCycle(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRegistry()
+	mustRegister(t, registry, fakeModule{name: "alpha", soft: []string{"beta"}})
+	mustRegister(t, registry, fakeModule{name: "beta", hard: []string{"alpha"}})
+	plan, err := registry.PlanAll()
+	if err == nil || plan != nil {
+		t.Fatalf("plan = %v, err = %v", names(plan), err)
 	}
 }
 
