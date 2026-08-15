@@ -10,7 +10,7 @@
 | `-network` | 网卡、MAC、IP 地址、IPv4 路由、DNS 配置摘要 | 6 小时 | `host` |
 | `-process` | PID、父进程、启动时钟、可执行文件、脱敏命令行、Cgroup、Namespace | 12 小时 | `host` |
 | `-port` | TCP 监听端口、UDP 本地端口及进程归属 | 1 小时 | `process` |
-| `-connection` | 已建立 TCP 连接及进程归属 | 1 小时 | `port` |
+| `-connection` | 已建立连接（ESTABLISHED 的 TCP/UDP）及进程归属 | 1 小时 | `port` |
 
 模块参数由注册表动态生成。以后注册 `service` 模块后会自动获得 `-service` 参数，并自动进入全量扫描，不需要修改 CLI 的模块名称列表。
 
@@ -134,7 +134,12 @@ Linux 默认输出根目录：
 ```bash
 go test ./...
 go vet ./...
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o asset-agent-linux-amd64 ./cmd/asset-agent
+VERSION=$(git describe --tags --always 2>/dev/null || echo dev)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+  -ldflags "-X github.com/Theearthwormsplitsvertically/scan/internal/buildinfo.Version=${VERSION} \
+            -X github.com/Theearthwormsplitsvertically/scan/internal/buildinfo.Commit=$(git rev-parse --short HEAD) \
+            -X github.com/Theearthwormsplitsvertically/scan/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o asset-agent-linux-amd64 ./cmd/asset-agent
 sudo ./scripts/verify-linux.sh ./asset-agent-linux-amd64
 ```
 
