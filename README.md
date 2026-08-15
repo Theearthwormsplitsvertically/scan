@@ -16,9 +16,10 @@
 
 ## 下载和安装
 
+本仓库为私有仓库，需先登录 GitHub CLI（`gh auth login`），再按版本下载：
+
 ```bash
-curl -fL -o asset-agent-linux-amd64 \
-  https://github.com/Theearthwormsplitsvertically/scan/releases/download/v0.4.0/asset-agent-linux-amd64
+gh release download v0.4.1 -R Theearthwormsplitsvertically/scan -p asset-agent-linux-amd64
 chmod +x asset-agent-linux-amd64
 sudo install -m 0755 asset-agent-linux-amd64 /usr/local/bin/asset-agent
 asset-agent version
