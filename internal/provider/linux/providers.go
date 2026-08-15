@@ -8,7 +8,9 @@ import (
 	"github.com/Theearthwormsplitsvertically/scan/internal/capability"
 	collecthost "github.com/Theearthwormsplitsvertically/scan/internal/collect/host"
 	collectnetwork "github.com/Theearthwormsplitsvertically/scan/internal/collect/network"
+	collectpackages "github.com/Theearthwormsplitsvertically/scan/internal/collect/packages"
 	collectprocess "github.com/Theearthwormsplitsvertically/scan/internal/collect/process"
+	collectservice "github.com/Theearthwormsplitsvertically/scan/internal/collect/service"
 	collectsocket "github.com/Theearthwormsplitsvertically/scan/internal/collect/socket"
 	"github.com/Theearthwormsplitsvertically/scan/internal/model"
 	"github.com/Theearthwormsplitsvertically/scan/internal/platform"
@@ -23,6 +25,8 @@ func New(root platform.Root) (*provider.Set, error) {
 		networkProvider{root: root},
 		processProvider{root: root},
 		socketProvider{root: root},
+		serviceProvider{root: root},
+		packageProvider{root: root},
 	)
 }
 
@@ -74,4 +78,24 @@ func (socketProvider) Capability() string { return provider.CapabilitySocket }
 
 func (item socketProvider) Collect(ctx context.Context, processes []model.Process) ([]model.Socket, []model.Relationship, model.CollectorStatus) {
 	return collectsocket.Collect(ctx, item.root, processes)
+}
+
+type serviceProvider struct {
+	root platform.Root
+}
+
+func (serviceProvider) Capability() string { return provider.CapabilityService }
+
+func (item serviceProvider) Collect(ctx context.Context) ([]model.Service, model.CollectorStatus) {
+	return collectservice.Collect(ctx, item.root)
+}
+
+type packageProvider struct {
+	root platform.Root
+}
+
+func (packageProvider) Capability() string { return provider.CapabilityPackage }
+
+func (item packageProvider) Collect(ctx context.Context) ([]model.Package, model.CollectorStatus) {
+	return collectpackages.Collect(ctx, item.root)
 }

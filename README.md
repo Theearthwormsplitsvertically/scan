@@ -11,15 +11,17 @@
 | `-process` | PID、父进程、启动时钟、可执行文件、脱敏命令行、Cgroup、Namespace | 12 小时 | `host` |
 | `-port` | TCP 监听端口、UDP 本地端口及进程归属 | 1 小时 | `process` |
 | `-connection` | 已建立连接（ESTABLISHED 的 TCP/UDP）及进程归属 | 1 小时 | `port` |
+| `-service` | systemd Unit 静态事实（描述、ExecStart、User/Group、WantedBy）与运行态 | 12 小时 | `host` |
+| `-package` | 已安装软件包清单（dpkg/apk）：版本、架构、维护者、描述、体积 | 24 小时 | `host` |
 
-模块参数由注册表动态生成。以后注册 `service` 模块后会自动获得 `-service` 参数，并自动进入全量扫描，不需要修改 CLI 的模块名称列表。
+模块参数由注册表动态生成。新增模块只需注册即可自动获得对应参数并进入全量扫描，不需要修改 CLI 的模块名称列表。
 
 ## 下载和安装
 
 本仓库为私有仓库，需先登录 GitHub CLI（`gh auth login`），再按版本下载：
 
 ```bash
-gh release download v0.4.1 -R Theearthwormsplitsvertically/scan -p asset-agent-linux-amd64
+gh release download v0.5.0 -R Theearthwormsplitsvertically/scan -p asset-agent-linux-amd64
 chmod +x asset-agent-linux-amd64
 sudo install -m 0755 asset-agent-linux-amd64 /usr/local/bin/asset-agent
 asset-agent version
@@ -41,6 +43,8 @@ sudo asset-agent -network
 sudo asset-agent -process
 sudo asset-agent -port
 sudo asset-agent -connection
+sudo asset-agent -service
+sudo asset-agent -package
 ```
 
 组合扫描：
@@ -143,4 +147,4 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
 sudo ./scripts/verify-linux.sh ./asset-agent-linux-amd64
 ```
 
-真实 Linux 验证脚本会运行五个单模块、组合扫描和全量扫描，并校验 schema `2.0`、目录和文件权限、JSONL 记录数、字节数、SHA-256、manifest 以及原子发布残留。
+真实 Linux 验证脚本会运行七个单模块、组合扫描和全量扫描，并校验 schema `2.0`、目录和文件权限、JSONL 记录数、字节数、SHA-256、manifest 以及原子发布残留。

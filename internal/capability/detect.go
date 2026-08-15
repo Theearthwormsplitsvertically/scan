@@ -85,6 +85,24 @@ func Detect(ctx context.Context, root platform.Root, architecture string) model.
 		report.Capabilities.Items = append(report.Capabilities.Items, model.Capability{Name: "cgroup", Status: model.StatusUnsupported, Detail: "not detected"})
 		report.SystemProfile.CgroupVersion = "unknown"
 	}
+	// 标记软件包数据库与 systemd 数据源存在性，供 doctor 保真度展示。
+	if _, err := root.Stat("/var/lib/dpkg/status"); err == nil {
+		report.SystemProfile.AvailableSources["dpkg"] = true
+	}
+	if _, err := root.Stat("/lib/apk/db/installed"); err == nil {
+		report.SystemProfile.AvailableSources["apk"] = true
+	}
+	if _, err := root.Stat("/var/lib/rpm"); err == nil {
+		report.SystemProfile.AvailableSources["rpm"] = true
+	} else if _, err := root.Stat("/usr/lib/sysimage/rpm"); err == nil {
+		report.SystemProfile.AvailableSources["rpm"] = true
+	}
+	if _, err := root.Stat("/etc/systemd/system"); err == nil {
+		report.SystemProfile.AvailableSources["systemd"] = true
+	} else if _, err := root.Stat("/run/systemd/system"); err == nil {
+		report.SystemProfile.AvailableSources["systemd"] = true
+	}
+
 	selinux := securityModuleCapability(root, "selinux", "/sys/fs/selinux/enforce", "1")
 	apparmor := securityModuleCapability(root, "apparmor", "/sys/module/apparmor/parameters/enabled", "Y")
 	docker := socketCapability(root, "docker", "/var/run/docker.sock")

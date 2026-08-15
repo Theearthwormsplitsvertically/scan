@@ -146,6 +146,29 @@ type Socket struct {
 	ProcessIDs    []string `json:"process_ids"`
 }
 
+// Service 表示一个 systemd Unit 的静态文件事实。
+type Service struct {
+	UnitName     string `json:"unit_name"`
+	Description  string `json:"description,omitempty"`
+	LoadState    string `json:"load_state,omitempty"`
+	FragmentPath string `json:"fragment_path,omitempty"`
+	ExecStart    string `json:"exec_start,omitempty"`
+	User         string `json:"user,omitempty"`
+	Group        string `json:"group,omitempty"`
+	WantedBy     string `json:"wanted_by,omitempty"`
+}
+
+// Package 表示一个已安装软件包事实。
+type Package struct {
+	Name               string `json:"name"`
+	Version            string `json:"version,omitempty"`
+	Architecture       string `json:"architecture,omitempty"`
+	Maintainer         string `json:"maintainer,omitempty"`
+	Source             string `json:"source,omitempty"`
+	Description        string `json:"description,omitempty"`
+	InstalledSizeBytes int64  `json:"installed_size_bytes,omitempty"`
+}
+
 // Relationship 记录两个采集对象之间有证据支撑的有向关联。
 type Relationship struct {
 	ID         string    `json:"id"`

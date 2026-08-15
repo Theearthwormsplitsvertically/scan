@@ -12,6 +12,8 @@ const (
 	CapabilityNetwork       = "network"
 	CapabilityProcess       = "process"
 	CapabilitySocket        = "socket"
+	CapabilityService       = "service"
+	CapabilityPackage       = "package"
 )
 
 // ProfileProvider 检测当前平台及可用数据源。
@@ -42,4 +44,16 @@ type ProcessProvider interface {
 type SocketProvider interface {
 	Provider
 	Collect(context.Context, []model.Process) ([]model.Socket, []model.Relationship, model.CollectorStatus)
+}
+
+// ServiceProvider 采集 systemd Unit 的静态文件事实。
+type ServiceProvider interface {
+	Provider
+	Collect(context.Context) ([]model.Service, model.CollectorStatus)
+}
+
+// PackageProvider 采集已安装软件包事实。
+type PackageProvider interface {
+	Provider
+	Collect(context.Context) ([]model.Package, model.CollectorStatus)
 }

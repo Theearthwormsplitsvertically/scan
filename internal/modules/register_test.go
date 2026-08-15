@@ -19,7 +19,7 @@ func TestNewRegistryContainsOnlyImplementedModulesAndPlansAll(t *testing.T) {
 	for _, descriptor := range descriptors {
 		listed = append(listed, descriptor.Name)
 	}
-	if !reflect.DeepEqual(listed, []string{"connection", "host", "network", "port", "process"}) {
+	if !reflect.DeepEqual(listed, []string{"connection", "host", "network", "package", "port", "process", "service"}) {
 		t.Fatalf("listed modules = %v", listed)
 	}
 	if _, exists := registry.Lookup("all"); exists {
@@ -29,7 +29,7 @@ func TestNewRegistryContainsOnlyImplementedModulesAndPlansAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := moduleNames(plan); !reflect.DeepEqual(got, []string{"host", "network", "process", "port", "connection"}) {
+	if got := moduleNames(plan); !reflect.DeepEqual(got, []string{"host", "network", "package", "process", "port", "service", "connection"}) {
 		t.Fatalf("all plan = %v", got)
 	}
 	counts := map[string]int{}
