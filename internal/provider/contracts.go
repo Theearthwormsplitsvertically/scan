@@ -14,6 +14,7 @@ const (
 	CapabilitySocket        = "socket"
 	CapabilityService       = "service"
 	CapabilityPackage       = "package"
+	CapabilityContainer     = "container"
 )
 
 // ProfileProvider 检测当前平台及可用数据源。
@@ -56,4 +57,10 @@ type ServiceProvider interface {
 type PackageProvider interface {
 	Provider
 	Collect(context.Context) ([]model.Package, model.CollectorStatus)
+}
+
+// ContainerProvider 采集容器与镜像事实。
+type ContainerProvider interface {
+	Provider
+	Collect(context.Context) ([]model.Container, []model.ContainerImage, model.CollectorStatus)
 }

@@ -58,3 +58,27 @@ func TestRedactArgsCompositeCredentialKeysAndPreservesAmbiguousShortOption(t *te
 		t.Fatalf("ordinary URL query parameter was changed: %q", joined)
 	}
 }
+
+func TestRedactLabelsRemovesSensitiveValuesOnly(t *testing.T) {
+	t.Parallel()
+
+	labels := map[string]string{
+		"com.example.app":   "nginx",
+		"com.example.token": "secret-token",
+		"DB_PASSWORD":       "hunter2",
+		"maintainer":        "ops@example.com",
+	}
+	got := RedactLabels(labels)
+	if got["com.example.app"] != "nginx" {
+		t.Fatalf("ordinary label changed: %q", got["com.example.app"])
+	}
+	if got["com.example.token"] != redacted || got["DB_PASSWORD"] != redacted {
+		t.Fatalf("sensitive label not redacted: %+v", got)
+	}
+	if got["maintainer"] != "ops@example.com" {
+		t.Fatalf("ordinary label changed: %q", got["maintainer"])
+	}
+	if RedactLabels(nil) != nil {
+		t.Fatal("nil labels should return nil")
+	}
+}

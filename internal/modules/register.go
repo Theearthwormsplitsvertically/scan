@@ -3,6 +3,7 @@ package modules
 import (
 	coremodule "github.com/Theearthwormsplitsvertically/scan/internal/module"
 	connectionmodule "github.com/Theearthwormsplitsvertically/scan/internal/modules/connection"
+	containermodule "github.com/Theearthwormsplitsvertically/scan/internal/modules/container"
 	hostmodule "github.com/Theearthwormsplitsvertically/scan/internal/modules/host"
 	networkmodule "github.com/Theearthwormsplitsvertically/scan/internal/modules/network"
 	packagemodule "github.com/Theearthwormsplitsvertically/scan/internal/modules/packages"
@@ -22,6 +23,7 @@ func NewRegistry() (*coremodule.Registry, error) {
 		connectionmodule.New(),
 		servicemodule.New(),
 		packagemodule.New(),
+		containermodule.New(),
 	); err != nil {
 		return nil, err
 	}

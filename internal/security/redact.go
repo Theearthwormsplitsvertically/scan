@@ -46,6 +46,23 @@ func RedactArgs(args []string) []string {
 	return result
 }
 
+// RedactLabels 返回已脱敏的标签副本，敏感键对应的值替换为 [REDACTED]。
+// 容器/镜像标签常被塞入凭据，须在进入统一模型前完成脱敏。
+func RedactLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(labels))
+	for key, value := range labels {
+		if isSensitiveKey(key) {
+			result[key] = redacted
+		} else {
+			result[key] = value
+		}
+	}
+	return result
+}
+
 // isSensitiveKey 识别精确键和由 -、_、. 组合的凭据键，同时保留 -p 等含义不明确的短参数。
 func isSensitiveKey(key string) bool {
 	key = strings.TrimSpace(key)

@@ -169,6 +169,45 @@ type Package struct {
 	InstalledSizeBytes int64  `json:"installed_size_bytes,omitempty"`
 }
 
+// Container 表示从容器运行时观测到的一个容器事实。
+type Container struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name,omitempty"`
+	ImageID   string            `json:"image_id,omitempty"`
+	ImageName string            `json:"image_name,omitempty"`
+	ImageTag  string            `json:"image_tag,omitempty"`
+	State     string            `json:"state,omitempty"`
+	Status    string            `json:"status,omitempty"`
+	Ports     []ContainerPort   `json:"ports,omitempty"`
+	Mounts    []ContainerMount  `json:"mounts,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// ContainerPort 表示容器的一个端口映射。
+type ContainerPort struct {
+	IP          string `json:"ip,omitempty"`
+	PrivatePort int    `json:"private_port"`
+	PublicPort  int    `json:"public_port,omitempty"`
+	Type        string `json:"type,omitempty"`
+}
+
+// ContainerMount 表示容器的一个挂载点。
+type ContainerMount struct {
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+}
+
+// ContainerImage 表示一个容器镜像事实。
+type ContainerImage struct {
+	ID          string            `json:"id"`
+	RepoTags    []string          `json:"repo_tags,omitempty"`
+	RepoDigests []string          `json:"repo_digests,omitempty"`
+	SizeBytes   int64             `json:"size_bytes,omitempty"`
+	CreatedAt   int64             `json:"created_at,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+}
+
 // Relationship 记录两个采集对象之间有证据支撑的有向关联。
 type Relationship struct {
 	ID         string    `json:"id"`

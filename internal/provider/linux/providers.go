@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/Theearthwormsplitsvertically/scan/internal/capability"
+	collectcontainer "github.com/Theearthwormsplitsvertically/scan/internal/collect/container"
 	collecthost "github.com/Theearthwormsplitsvertically/scan/internal/collect/host"
 	collectnetwork "github.com/Theearthwormsplitsvertically/scan/internal/collect/network"
 	collectpackages "github.com/Theearthwormsplitsvertically/scan/internal/collect/packages"
@@ -27,6 +28,7 @@ func New(root platform.Root) (*provider.Set, error) {
 		socketProvider{root: root},
 		serviceProvider{root: root},
 		packageProvider{root: root},
+		containerProvider{source: collectcontainer.NewDockerSource("/var/run/docker.sock")},
 	)
 }
 
@@ -98,4 +100,14 @@ func (packageProvider) Capability() string { return provider.CapabilityPackage }
 
 func (item packageProvider) Collect(ctx context.Context) ([]model.Package, model.CollectorStatus) {
 	return collectpackages.Collect(ctx, item.root)
+}
+
+type containerProvider struct {
+	source collectcontainer.Source
+}
+
+func (containerProvider) Capability() string { return provider.CapabilityContainer }
+
+func (item containerProvider) Collect(ctx context.Context) ([]model.Container, []model.ContainerImage, model.CollectorStatus) {
+	return collectcontainer.Collect(ctx, item.source)
 }

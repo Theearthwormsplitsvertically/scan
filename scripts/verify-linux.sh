@@ -85,18 +85,19 @@ port_batch=$(scan_and_get_batch "$work_dir/port.txt" -port)
 connection_batch=$(scan_and_get_batch "$work_dir/connection.txt" -connection)
 service_batch=$(scan_and_get_batch "$work_dir/service.txt" -service)
 package_batch=$(scan_and_get_batch "$work_dir/package.txt" -package)
+container_batch=$(scan_and_get_batch "$work_dir/container.txt" -container)
 multi_batch=$(scan_and_get_batch "$work_dir/multi.txt" -network -port)
 snapshot_batch=$(scan_and_get_batch "$work_dir/snapshot.txt" scan)
 
 [ "$(stat -c '%a' "$output_root")" = '700' ]
 [ "$(stat -c '%a' "$output_root/inbox")" = '700' ]
-for batch_dir in "$host_batch" "$network_batch" "$process_batch" "$port_batch" "$connection_batch" "$service_batch" "$package_batch" "$multi_batch" "$snapshot_batch"; do
+for batch_dir in "$host_batch" "$network_batch" "$process_batch" "$port_batch" "$connection_batch" "$service_batch" "$package_batch" "$container_batch" "$multi_batch" "$snapshot_batch"; do
   validate_batch "$batch_dir"
 done
 
 latest_snapshot=$(find "$output_root/inbox" -mindepth 1 -maxdepth 1 -type d -name 'snapshot-*' | sort | tail -n 1)
 [ "$latest_snapshot" = "$snapshot_batch" ] || { printf '%s\n' '最新正式快照目录与命令返回值不一致。' >&2; exit 1; }
-jq -e '[.modules[].module] | sort == ["connection","host","network","package","port","process","service"]' "$snapshot_batch/manifest.json" >/dev/null
+jq -e '[.modules[].module] | sort == ["connection","container","host","network","package","port","process","service"]' "$snapshot_batch/manifest.json" >/dev/null
 jq -e '.batch_type == "module" and .requested_module == "multi"' "$multi_batch/manifest.json" >/dev/null
 jq -e '.batch_type == "snapshot" and .requested_module == "all"' "$snapshot_batch/manifest.json" >/dev/null
 
