@@ -2,4 +2,5 @@
 dist/
 docs/legacy/*.json
 asset-agent-linux-amd64
+test/
 
